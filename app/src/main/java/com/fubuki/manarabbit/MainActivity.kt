@@ -140,7 +140,7 @@ fun MainScreen() {
             when (selectedTab) {
                 0 -> HomeScreen(
                     onMangaClick = { selectedManga = it },
-                    onMoreUpdated = { moreListData = Pair("업데이트된 만화", it) }
+                    onMoreUpdated = { moreListData = Pair("최신 만화", it) }
                 )
                 1 -> Text("검색 화면")
                 2 -> Text("서재 화면")

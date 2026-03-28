@@ -1,8 +1,11 @@
 package com.fubuki.manarabbit
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +35,7 @@ import okhttp3.Request
 import org.jsoup.Jsoup
 import java.net.URLDecoder
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ViewerScreen(
@@ -49,6 +53,14 @@ fun ViewerScreen(
     val viewerMode by store.viewerMode.collectAsState(initial = "scroll")
     val viewerDouble by store.viewerDouble.collectAsState(initial = false)
     val viewerDoubleFirst by store.viewerDoubleFirst.collectAsState(initial = "single")
+    val viewerDirection by store.viewerDirection.collectAsState(initial = "ltr")
+    val darkTheme = isSystemInDarkTheme()
+    val theme by store.theme.collectAsState(initial = "system")
+    val isDark = when (theme) {
+        "dark" -> true
+        "light" -> false
+        else -> darkTheme
+    }
 
     var currentId by remember { mutableIntStateOf(episodeId) }
     var currentTitle by remember { mutableStateOf(episodeTitle) }
@@ -57,6 +69,7 @@ fun ViewerScreen(
     var status by remember { mutableStateOf("") }
     var showBars by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var currentImageIndex by remember { mutableIntStateOf(0) }
 
     val currentIndex = episodeList.indexOfFirst { it.id == currentId }
     val hasPrev = currentIndex < episodeList.size - 1
@@ -68,6 +81,7 @@ fun ViewerScreen(
         images = emptyList()
         isLoading = true
         status = ""
+        currentImageIndex = 0
         scope.launch {
             val result = fetchViewerImages(baseUrl, id, cfCookies)
             if (result.isEmpty()) status = "이미지를 불러오지 못했습니다"
@@ -75,6 +89,32 @@ fun ViewerScreen(
             isLoading = false
         }
     }
+
+    val pages = remember(images, viewerDouble, viewerDoubleFirst) {
+        buildPages(images, viewerDouble, viewerDoubleFirst)
+    }
+
+    val targetPage = remember(pages, currentImageIndex) {
+        if (pages.isEmpty()) 0
+        else pages.indexOfFirst { it.contains(images.getOrNull(currentImageIndex) ?: "") }
+            .takeIf { it >= 0 } ?: 0
+    }
+
+    val pagerState = rememberPagerState(
+        initialPage = targetPage,
+        pageCount = { if (pages.isEmpty()) 1 else pages.size }
+    )
+
+    LaunchedEffect(pagerState.currentPage) {
+        val page = pages.getOrNull(pagerState.currentPage)
+        if (page != null) {
+            val idx = images.indexOf(page.first())
+            if (idx >= 0) currentImageIndex = idx
+        }
+    }
+
+    val currentPage = currentImageIndex + 1
+    val totalPages = images.size
 
     LaunchedEffect(currentId, baseUrl) {
         if (baseUrl.isNotEmpty()) loadEpisode(currentId, currentTitle)
@@ -87,7 +127,13 @@ fun ViewerScreen(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val bgColor = if (isDark) Color.Black else Color.White
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bgColor)
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -116,13 +162,14 @@ fun ViewerScreen(
                             }
                         }
                     } else {
-                        val pages = buildPages(images, viewerDouble, viewerDoubleFirst)
-                        val pagerState = rememberPagerState(pageCount = { pages.size })
                         HorizontalPager(
                             state = pagerState,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            reverseLayout = viewerDirection == "rtl",
+                            pageSpacing = 0.dp
                         ) { pageIndex ->
-                            val page = pages[pageIndex]
+                            val page = if (pages.isNotEmpty()) pages[pageIndex] else emptyList()
+
                             if (page.size == 1) {
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
@@ -135,18 +182,50 @@ fun ViewerScreen(
                                     contentScale = ContentScale.Fit
                                 )
                             } else {
-                                Row(modifier = Modifier.fillMaxSize()) {
-                                    page.forEach { url ->
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context)
-                                                .data(url)
-                                                .addHeader("Referer", baseUrl)
-                                                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
-                                                .build(),
-                                            contentDescription = null,
-                                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                                            contentScale = ContentScale.Fit
-                                        )
+                                BoxWithConstraints(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val isLandscape = maxWidth > maxHeight
+                                    if (isLandscape) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(0.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            page.forEach { url ->
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(url)
+                                                        .addHeader("Referer", baseUrl)
+                                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                                        .build(),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxHeight(),
+                                                    contentScale = ContentScale.FillHeight
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(0.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            page.forEach { url ->
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(url)
+                                                        .addHeader("Referer", baseUrl)
+                                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                                        .build(),
+                                                    contentDescription = null,
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .fillMaxHeight(),
+                                                    contentScale = ContentScale.Fit
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -191,7 +270,11 @@ fun ViewerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "${episodeList.size - currentIndex}화 / ${episodeList.size}화",
+                        text = if (viewerMode == "scroll") {
+                            "${episodeList.size - currentIndex}화 / ${episodeList.size}화"
+                        } else {
+                            "$currentPage / $totalPages"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White,
                         modifier = Modifier.padding(start = 8.dp)
@@ -262,6 +345,7 @@ fun ViewerSettingsDialog(
     val viewerMode by store.viewerMode.collectAsState(initial = "scroll")
     val viewerDouble by store.viewerDouble.collectAsState(initial = false)
     val viewerDoubleFirst by store.viewerDoubleFirst.collectAsState(initial = "single")
+    val viewerDirection by store.viewerDirection.collectAsState(initial = "ltr")
 
     Dialog(onDismissRequest = onDismiss) {
         Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -269,10 +353,10 @@ fun ViewerSettingsDialog(
                 Text("뷰어 설정", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(16.dp))
 
-                Text("읽기 방향", style = MaterialTheme.typography.labelLarge)
+                Text("읽기 방식", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("scroll" to "세로 스크롤", "pager" to "페이지 넘기기").forEach { (value, label) ->
+                    listOf("scroll" to "스크롤 보기", "pager" to "페이지 보기").forEach { (value, label) ->
                         FilterChip(
                             selected = viewerMode == value,
                             onClick = { scope.launch { store.saveViewerMode(value) } },
@@ -281,30 +365,45 @@ fun ViewerSettingsDialog(
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("2페이지 보기", style = MaterialTheme.typography.labelLarge)
-                    Switch(
-                        checked = viewerDouble,
-                        onCheckedChange = { scope.launch { store.saveViewerDouble(it) } }
-                    )
-                }
-
-                if (viewerDouble) {
-                    Spacer(Modifier.height(8.dp))
-                    Text("첫 페이지", style = MaterialTheme.typography.labelLarge)
+                if (viewerMode == "pager") {
+                    Spacer(Modifier.height(16.dp))
+                    Text("페이지 방향", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("single" to "1장", "double" to "2장").forEach { (value, label) ->
+                        listOf("ltr" to "좌에서 우로", "rtl" to "우에서 좌로").forEach { (value, label) ->
                             FilterChip(
-                                selected = viewerDoubleFirst == value,
-                                onClick = { scope.launch { store.saveViewerDoubleFirst(value) } },
+                                selected = viewerDirection == value,
+                                onClick = { scope.launch { store.saveViewerDirection(value) } },
                                 label = { Text(label) }
                             )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("2페이지 보기", style = MaterialTheme.typography.labelLarge)
+                        Switch(
+                            checked = viewerDouble,
+                            onCheckedChange = { scope.launch { store.saveViewerDouble(it) } }
+                        )
+                    }
+
+                    if (viewerDouble) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("첫 페이지", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("single" to "1장", "double" to "2장").forEach { (value, label) ->
+                                FilterChip(
+                                    selected = viewerDoubleFirst == value,
+                                    onClick = { scope.launch { store.saveViewerDoubleFirst(value) } },
+                                    label = { Text(label) }
+                                )
+                            }
                         }
                     }
                 }

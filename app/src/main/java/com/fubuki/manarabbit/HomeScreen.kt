@@ -77,7 +77,7 @@ fun HomeScreen(
                 LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
                     if (homeData.updated.isNotEmpty()) {
                         item {
-                            SectionTitle("업데이트된 만화", onMoreClick = { onMoreUpdated(homeData.updated) })
+                            SectionTitle("최신 만화", onMoreClick = { onMoreUpdated(homeData.updated) })
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 12.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)

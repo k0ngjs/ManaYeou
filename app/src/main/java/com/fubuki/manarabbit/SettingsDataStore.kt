@@ -20,6 +20,7 @@ class SettingsDataStore(private val context: Context) {
         val VIEWER_MODE_KEY = stringPreferencesKey("viewer_mode")
         val VIEWER_DOUBLE_KEY = stringPreferencesKey("viewer_double")
         val VIEWER_DOUBLE_FIRST_KEY = stringPreferencesKey("viewer_double_first")
+        val VIEWER_DIRECTION_KEY = stringPreferencesKey("viewer_direction") // ltr, rtl
     }
 
     val baseUrl: Flow<String> = context.dataStore.data.map { prefs ->
@@ -44,6 +45,14 @@ class SettingsDataStore(private val context: Context) {
 
     val viewerDoubleFirst: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[VIEWER_DOUBLE_FIRST_KEY] ?: "single"
+    }
+
+    val viewerDirection: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[VIEWER_DIRECTION_KEY] ?: "ltr"
+    }
+
+    suspend fun saveViewerDirection(value: String) {
+        context.dataStore.edit { prefs -> prefs[VIEWER_DIRECTION_KEY] = value }
     }
 
     suspend fun saveBaseUrl(url: String) {
