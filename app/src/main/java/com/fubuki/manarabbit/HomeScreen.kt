@@ -23,14 +23,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 
-data class MangaItem(
-    val id: Int,
-    val name: String,
-    val thumb: String,
-    val referer: String = "",
-    val isEpisode: Boolean = false
-)
-
 data class HomeData(
     val updated: List<MangaItem> = emptyList(),
     val popular: List<MangaItem> = emptyList()
@@ -39,7 +31,8 @@ data class HomeData(
 @Composable
 fun HomeScreen(
     onMangaClick: (MangaItem) -> Unit = {},
-    onMoreUpdated: (List<MangaItem>) -> Unit = {}
+    onMoreUpdated: (List<MangaItem>) -> Unit = {},
+    onMoreRecent: (List<RecentMangaItem>) -> Unit = {}
 ) {
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
@@ -47,25 +40,25 @@ fun HomeScreen(
 
     val baseUrl by store.baseUrl.collectAsState(initial = "")
     val cfCookies by store.cfCookies.collectAsState(initial = "")
+    val recentMangaStr by store.recentMangaV2.collectAsState(initial = "")
+    val recentManga = remember(recentMangaStr) { store.parseRecentMangaList(recentMangaStr) }
+
     var homeData by remember { mutableStateOf(HomeData()) }
     var status by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(baseUrl) {
-        if (baseUrl.isNotEmpty()) {
-            isLoading = true
-            status = ""
-            scope.launch {
-                val result = fetchHomeData(baseUrl, cfCookies)
-                if (result.updated.isEmpty() && result.popular.isEmpty()) {
-                    status = "목록을 불러오지 못했습니다"
-                } else {
-                    homeData = result
-                }
-                isLoading = false
+        if (baseUrl.isEmpty()) return@LaunchedEffect
+        isLoading = true
+        status = ""
+        scope.launch {
+            val result = fetchHomeData(baseUrl, cfCookies)
+            if (result.updated.isEmpty() && result.popular.isEmpty()) {
+                status = "목록을 불러오지 못했습니다"
+            } else {
+                homeData = result
             }
-        } else {
-            status = "설정에서 서버 주소를 입력해주세요"
+            isLoading = false
         }
     }
 
@@ -75,6 +68,7 @@ fun HomeScreen(
             status.isNotEmpty() -> Text(status, modifier = Modifier.align(Alignment.Center))
             else -> {
                 LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                    // 최신 만화
                     if (homeData.updated.isNotEmpty()) {
                         item {
                             SectionTitle("최신 만화", onMoreClick = { onMoreUpdated(homeData.updated) })
@@ -88,18 +82,44 @@ fun HomeScreen(
                             }
                         }
                     }
-                    if (homeData.popular.isNotEmpty()) {
+
+                    // 최근 본 만화
+                    if (recentManga.isNotEmpty()) {
                         item {
-                            Spacer(Modifier.height(16.dp))
-                            SectionTitle("인기 만화")
+                            SectionTitle("최근 본 만화", onMoreClick = { onMoreRecent(recentManga) })
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 12.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(homeData.popular.take(10)) { item ->
-                                    MangaCard(item, onClick = { onMangaClick(item) })
+                                items(recentManga.take(5)) { item ->
+                                    RecentMangaCard(item, onClick = { onMangaClick(MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)) })
                                 }
                             }
+                            Spacer(Modifier.height(16.dp))
+                        }
+                    }
+
+                    // 인기 만화
+                    if (homeData.popular.isNotEmpty()) {
+                        item {
+                            Spacer(Modifier.height(16.dp))
+                            SectionTitle("인기 만화")
+                        }
+                        items(homeData.popular) { item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onMangaClick(item) }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = item.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            HorizontalDivider(thickness = 0.5.dp)
                         }
                     }
                 }
@@ -149,12 +169,42 @@ fun MangaCard(item: MangaItem, onClick: () -> Unit = {}) {
     }
 }
 
+@Composable
+fun RecentMangaCard(item: RecentMangaItem, onClick: () -> Unit = {}) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.width(110.dp).clickable { onClick() }) {
+        Box {
+            Card(modifier = Modifier.width(110.dp).height(150.dp)) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(item.thumb)
+                        .addHeader("Referer", item.referer)
+                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.mangaName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+        Text(
+            text = item.mangaName,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
 suspend fun fetchHomeData(baseUrl: String, cookieStr: String = ""): HomeData {
     return withContext(Dispatchers.IO) {
         try {
             val cleanUrl = baseUrl.trimEnd('/')
             val client = OkHttpClient()
 
+            // 최신 만화
             val updateRequest = Request.Builder()
                 .url("$cleanUrl/page/update")
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
@@ -174,23 +224,30 @@ suspend fun fetchHomeData(baseUrl: String, cookieStr: String = ""): HomeData {
                 updated.add(MangaItem(seriesId, name, thumb, cleanUrl))
             }
 
-            val popularRequest = Request.Builder()
-                .url("$cleanUrl/page/popular")
+            // 인기 만화
+            val mainRequest = Request.Builder()
+                .url(cleanUrl)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
                 .header("Referer", cleanUrl)
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
-            val popularResponse = client.newCall(popularRequest).execute()
-            val popularBody = popularResponse.body?.string() ?: ""
-            popularResponse.close()
+            val mainResponse = client.newCall(mainRequest).execute()
+            val mainBody = mainResponse.body?.string() ?: ""
+            mainResponse.close()
 
-            val popularDoc = Jsoup.parse(popularBody)
+            val mainDoc = Jsoup.parse(mainBody)
             val popular = mutableListOf<MangaItem>()
-            for (e in popularDoc.select("div.media.post-list").take(20)) {
-                val seriesId = e.selectFirst("a.btn-primary")?.attr("rel")?.toIntOrNull() ?: continue
-                val thumb = e.selectFirst("img")?.attr("src") ?: ""
-                val name = e.selectFirst("div.post-subject a")?.ownText()?.trim() ?: continue
-                popular.add(MangaItem(seriesId, name, thumb, cleanUrl))
+            val weeklySection = mainDoc.select("div.div-tab").firstOrNull { div ->
+                div.selectFirst("a")?.text()?.contains("주간 베스트") == true
+            }
+            for (e in weeklySection?.select("ul.post-list li.post-row")?.take(20) ?: emptyList()) {
+                val anchor = e.selectFirst("a") ?: continue
+                val href = anchor.attr("href")
+                val episodeId = href.split("/").lastOrNull()
+                    ?.filter { it.isDigit() }?.toIntOrNull() ?: continue
+                val name = anchor.ownText().trim()
+                if (name.isEmpty()) continue
+                popular.add(MangaItem(episodeId, name, "", cleanUrl, isEpisode = true))
             }
 
             HomeData(updated, popular)

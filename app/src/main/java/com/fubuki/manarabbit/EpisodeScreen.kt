@@ -56,6 +56,9 @@ fun EpisodeScreen(
 
     val baseUrl by store.baseUrl.collectAsState(initial = "")
     val cfCookies by store.cfCookies.collectAsState(initial = "")
+    val recentMangaStr by store.recentMangaV2.collectAsState(initial = "")
+    val recentManga = remember(recentMangaStr) { store.parseRecentMangaList(recentMangaStr) }
+    val lastEpisodeId = recentManga.find { it.mangaId == mangaId }?.lastEpisodeId
     var pageData by remember { mutableStateOf(EpisodePageData()) }
     var isLoading by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
@@ -69,6 +72,15 @@ fun EpisodeScreen(
                     status = "에피소드를 불러오지 못했습니다"
                 } else {
                     pageData = result
+                    // 최근 본 만화 저장
+                    store.saveRecentManga(
+                        MangaItem(
+                            id = mangaId,
+                            name = result.detail.name,
+                            thumb = result.detail.thumb,
+                            referer = baseUrl
+                        )
+                    )
                 }
                 isLoading = false
             }
@@ -127,11 +139,31 @@ fun EpisodeScreen(
                         }
                         items(pageData.episodes) { ep ->
                             ListItem(
-                                headlineContent = { Text(ep.title) },
+                                headlineContent = {
+                                    Text(
+                                        text = ep.title,
+                                        color = if (ep.id == lastEpisodeId)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
                                 supportingContent = {
                                     Text(ep.date, style = MaterialTheme.typography.bodySmall)
                                 },
                                 modifier = Modifier.clickable {
+                                    scope.launch {
+                                        store.saveRecentMangaV2(
+                                            RecentMangaItem(
+                                                mangaId = mangaId,
+                                                mangaName = pageData.detail.name,
+                                                thumb = pageData.detail.thumb,
+                                                referer = baseUrl,
+                                                lastEpisodeId = ep.id,
+                                                lastEpisodeTitle = ep.title
+                                            )
+                                        )
+                                    }
                                     onEpisodeClick(ep.id, ep.title, pageData.episodes)
                                 }
                             )

@@ -7,9 +7,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -49,6 +49,7 @@ fun MainScreen() {
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
     val baseUrl by store.baseUrl.collectAsState(initial = "")
+    var recentListData by remember { mutableStateOf<List<RecentMangaItem>?>(null) }
 
     // 클라우드플레어 인증 화면
     if (showCloudflareScreen) {
@@ -71,7 +72,11 @@ fun MainScreen() {
             episodeId = selectedEpisode!!.first,
             episodeTitle = selectedEpisode!!.second,
             episodeList = selectedEpisode!!.third,
-            onBack = { selectedEpisode = null }
+            onBack = { selectedEpisode = null },
+            onList = { seriesId ->
+                selectedEpisode = null
+                selectedManga = MangaItem(seriesId, "", "", "")
+            }
         )
         return
     }
@@ -85,6 +90,18 @@ fun MainScreen() {
             onEpisodeClick = { id, title, list ->
                 selectedEpisode = Triple(id, title, list)
             }
+        )
+        return
+    }
+
+    if (recentListData != null) {
+        RecentListScreen(
+            items = recentListData!!,
+            onMangaClick = { item ->
+                recentListData = null
+                selectedManga = MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)
+            },
+            onBack = { recentListData = null }
         )
         return
     }
@@ -121,8 +138,8 @@ fun MainScreen() {
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Filled.Favorite, "서재") },
-                    label = { Text("서재") }
+                    icon = { Icon(Icons.Filled.Person, "마이") },
+                    label = { Text("마이") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
@@ -139,11 +156,22 @@ fun MainScreen() {
         ) {
             when (selectedTab) {
                 0 -> HomeScreen(
-                    onMangaClick = { selectedManga = it },
-                    onMoreUpdated = { moreListData = Pair("최신 만화", it) }
+                    onMangaClick = { manga ->
+                        if (manga.isEpisode) {
+                            selectedEpisode = Triple(manga.id, manga.name, emptyList())
+                        } else {
+                            selectedManga = manga
+                        }
+                    },
+                    onMoreUpdated = { moreListData = Pair("최신 만화", it) },
+                    onMoreRecent = { recentListData = it }
                 )
                 1 -> Text("검색 화면")
-                2 -> Text("서재 화면")
+                2 -> MyScreen(
+                    onMangaClick = { item ->
+                        selectedManga = MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)
+                    }
+                )
                 3 -> SettingsScreen(onCfAuthClick = { showCloudflareScreen = true })
             }
         }

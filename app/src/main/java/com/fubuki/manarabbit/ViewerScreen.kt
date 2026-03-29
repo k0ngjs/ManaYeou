@@ -42,7 +42,8 @@ fun ViewerScreen(
     episodeId: Int,
     episodeTitle: String,
     episodeList: List<EpisodeItem> = emptyList(),
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onList: ((Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
@@ -70,9 +71,11 @@ fun ViewerScreen(
     var showBars by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var currentImageIndex by remember { mutableIntStateOf(0) }
+    var loadedEpisodeList by remember { mutableStateOf(episodeList) }
+    var seriesMangaId by remember { mutableIntStateOf(0) }
 
-    val currentIndex = episodeList.indexOfFirst { it.id == currentId }
-    val hasPrev = currentIndex < episodeList.size - 1
+    val currentIndex = loadedEpisodeList.indexOfFirst { it.id == currentId }
+    val hasPrev = currentIndex < loadedEpisodeList.size - 1
     val hasNext = currentIndex > 0
 
     fun loadEpisode(id: Int, title: String) {
@@ -117,7 +120,32 @@ fun ViewerScreen(
     val totalPages = images.size
 
     LaunchedEffect(currentId, baseUrl) {
-        if (baseUrl.isNotEmpty()) loadEpisode(currentId, currentTitle)
+        if (baseUrl.isNotEmpty()) {
+            android.util.Log.d("ManaRabbit", "episodeList size: ${loadedEpisodeList.size}")
+            loadEpisode(currentId, currentTitle)
+            if (loadedEpisodeList.isEmpty()) {
+                android.util.Log.d("ManaRabbit", "fetching episode list...")
+                scope.launch {
+                    val pair = fetchEpisodeListAndSeriesId(baseUrl, currentId, cfCookies)
+                    if (pair.second > 0) seriesMangaId = pair.second
+                    if (pair.first.isNotEmpty()) {
+                        loadedEpisodeList = pair.first
+                        // 시리즈 정보를 가져와서 최근 본 만화 저장
+                        val seriesData = fetchEpisodePageData(baseUrl, pair.second, cfCookies)
+                        store.saveRecentMangaV2(
+                            RecentMangaItem(
+                                mangaId = pair.second,
+                                mangaName = seriesData.detail.name,
+                                thumb = seriesData.detail.thumb,
+                                referer = baseUrl,
+                                lastEpisodeId = currentId,
+                                lastEpisodeTitle = currentTitle
+                            )
+                        )
+                    }
+                }
+            }
+        }
     }
 
     if (showSettings) {
@@ -258,7 +286,7 @@ fun ViewerScreen(
             )
         }
 
-        if (showBars && episodeList.isNotEmpty()) {
+        if (showBars && loadedEpisodeList.isNotEmpty()) {
             BottomAppBar(
                 modifier = Modifier.align(Alignment.BottomCenter),
                 containerColor = Color.Black.copy(alpha = 0.7f),
@@ -271,7 +299,7 @@ fun ViewerScreen(
                 ) {
                     Text(
                         text = if (viewerMode == "scroll") {
-                            "${episodeList.size - currentIndex}화 / ${episodeList.size}화"
+                            "${loadedEpisodeList.size - currentIndex}화 / ${loadedEpisodeList.size}화"
                         } else {
                             "$currentPage / $totalPages"
                         },
@@ -283,7 +311,7 @@ fun ViewerScreen(
                         IconButton(
                             onClick = {
                                 if (hasPrev) {
-                                    val prev = episodeList[currentIndex + 1]
+                                    val prev = loadedEpisodeList[currentIndex + 1]
                                     loadEpisode(prev.id, prev.title)
                                 }
                             },
@@ -291,13 +319,19 @@ fun ViewerScreen(
                         ) {
                             Icon(Icons.Filled.ArrowBack, "이전화", tint = Color.White)
                         }
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = {
+                            if (onList != null && seriesMangaId > 0) {
+                                onList(seriesMangaId)
+                            } else {
+                                onBack()
+                            }
+                        }) {
                             Icon(Icons.Filled.List, "목록", tint = Color.White)
                         }
                         IconButton(
                             onClick = {
                                 if (hasNext) {
-                                    val next = episodeList[currentIndex - 1]
+                                    val next = loadedEpisodeList[currentIndex - 1]
                                     loadEpisode(next.id, next.title)
                                 }
                             },
@@ -485,6 +519,36 @@ suspend fun fetchViewerImages(baseUrl: String, episodeId: Int, cookieStr: String
             result
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+}
+
+suspend fun fetchEpisodeListAndSeriesId(baseUrl: String, episodeId: Int, cookieStr: String = ""): Pair<List<EpisodeItem>, Int> {
+    return withContext(Dispatchers.IO) {
+        try {
+            val cleanUrl = baseUrl.trimEnd('/')
+            val client = OkHttpClient()
+            val request = Request.Builder()
+                .url("$cleanUrl/comic/$episodeId")
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                .header("Referer", cleanUrl)
+                .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
+                .build()
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: return@withContext Pair(emptyList(), 0)
+            response.close()
+
+            val doc = Jsoup.parse(body)
+            val navbar = doc.selectFirst("div.toon-nav") ?: return@withContext Pair(emptyList(), 0)
+            val seriesId = navbar.select("a").last()
+                ?.attr("href")?.split("comic/")?.getOrNull(1)
+                ?.split("?")?.firstOrNull()
+                ?.filter { it.isDigit() }?.toIntOrNull() ?: return@withContext Pair(emptyList(), 0)
+
+            val episodes = fetchEpisodes(cleanUrl, seriesId, cookieStr)
+            Pair(episodes, seriesId)
+        } catch (e: Exception) {
+            Pair(emptyList(), 0)
         }
     }
 }
