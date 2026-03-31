@@ -9,6 +9,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 import java.net.URLDecoder
+import androidx.activity.compose.BackHandler
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -43,7 +45,8 @@ fun ViewerScreen(
     episodeTitle: String,
     episodeList: List<EpisodeItem> = emptyList(),
     onBack: () -> Unit,
-    onList: ((Int) -> Unit)? = null
+    onList: ((Int) -> Unit)? = null,
+    onAuthNeeded: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
@@ -87,32 +90,47 @@ fun ViewerScreen(
         currentImageIndex = 0
         scope.launch {
             val result = fetchViewerImages(baseUrl, id, cfCookies)
-            if (result.isEmpty()) status = "이미지를 불러오지 못했습니다"
-            else images = result
+            if (result.isEmpty()) {
+                status = "이미지를 불러오지 못했습니다"
+                onAuthNeeded()
+            } else images = result
             isLoading = false
         }
     }
 
-    val pages = remember(images, viewerDouble, viewerDoubleFirst) {
-        buildPages(images, viewerDouble, viewerDoubleFirst)
-    }
-
-    val targetPage = remember(pages, currentImageIndex) {
-        if (pages.isEmpty()) 0
-        else pages.indexOfFirst { it.contains(images.getOrNull(currentImageIndex) ?: "") }
-            .takeIf { it >= 0 } ?: 0
+    val pages = remember(images, viewerDouble, viewerDoubleFirst, viewerDirection) {
+        buildPages(images, viewerDouble, viewerDoubleFirst, viewerDirection == "rtl")
     }
 
     val pagerState = rememberPagerState(
-        initialPage = targetPage,
+        initialPage = 0,
         pageCount = { if (pages.isEmpty()) 1 else pages.size }
     )
 
+    val listState = rememberLazyListState()
+
+    // pages가 바뀔 때 (1페이지↔2페이지 전환 시) 현재 이미지 위치로 이동
+    LaunchedEffect(pages) {
+        if (pages.isNotEmpty() && images.isNotEmpty()) {
+            val targetImg = images.getOrNull(currentImageIndex) ?: return@LaunchedEffect
+            val targetPage = pages.indexOfFirst { it.contains(targetImg) }.takeIf { it >= 0 } ?: 0
+            pagerState.scrollToPage(targetPage)
+        }
+    }
+
+    // 페이지 넘길 때 currentImageIndex 업데이트
     LaunchedEffect(pagerState.currentPage) {
         val page = pages.getOrNull(pagerState.currentPage)
         if (page != null) {
             val idx = images.indexOf(page.first())
             if (idx >= 0) currentImageIndex = idx
+        }
+    }
+
+    // 스크롤 시 currentImageIndex 업데이트
+    LaunchedEffect(listState.firstVisibleItemIndex) {
+        if (viewerMode == "scroll") {
+            currentImageIndex = listState.firstVisibleItemIndex
         }
     }
 
@@ -130,7 +148,6 @@ fun ViewerScreen(
                     if (pair.second > 0) seriesMangaId = pair.second
                     if (pair.first.isNotEmpty()) {
                         loadedEpisodeList = pair.first
-                        // 시리즈 정보를 가져와서 최근 본 만화 저장
                         val seriesData = fetchEpisodePageData(baseUrl, pair.second, cfCookies)
                         store.saveRecentMangaV2(
                             RecentMangaItem(
@@ -146,6 +163,10 @@ fun ViewerScreen(
                 }
             }
         }
+    }
+
+    BackHandler {
+        onBack()
     }
 
     if (showSettings) {
@@ -175,7 +196,10 @@ fun ViewerScreen(
                 status.isNotEmpty() -> Text(status, modifier = Modifier.align(Alignment.Center))
                 else -> {
                     if (viewerMode == "scroll") {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
                             items(images) { imageUrl ->
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
@@ -297,16 +321,16 @@ fun ViewerScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = if (viewerMode == "scroll") {
-                            "${loadedEpisodeList.size - currentIndex}화 / ${loadedEpisodeList.size}화"
-                        } else {
-                            "$currentPage / $totalPages"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
+                    if (viewerMode == "scroll") {
+                        Spacer(Modifier.weight(1f))
+                    } else {
+                        Text(
+                            text = "$currentPage / $totalPages",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
                     Row {
                         IconButton(
                             onClick = {
@@ -349,7 +373,8 @@ fun ViewerScreen(
 fun buildPages(
     images: List<String>,
     doubleMode: Boolean,
-    doubleFirst: String
+    doubleFirst: String,
+    rtl: Boolean = false
 ): List<List<String>> {
     if (!doubleMode) return images.map { listOf(it) }
     val pages = mutableListOf<List<String>>()
@@ -360,7 +385,11 @@ fun buildPages(
     }
     while (i < images.size) {
         if (i + 1 < images.size) {
-            pages.add(listOf(images[i], images[i + 1]))
+            if (rtl) {
+                pages.add(listOf(images[i + 1], images[i]))
+            } else {
+                pages.add(listOf(images[i], images[i + 1]))
+            }
             i += 2
         } else {
             pages.add(listOf(images[i]))

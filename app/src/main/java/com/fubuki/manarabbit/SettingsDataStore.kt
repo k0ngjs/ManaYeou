@@ -23,6 +23,7 @@ class SettingsDataStore(private val context: Context) {
         val VIEWER_DIRECTION_KEY = stringPreferencesKey("viewer_direction")
         val RECENT_MANGA_KEY = stringPreferencesKey("recent_manga")
         val RECENT_MANGA_V2_KEY = stringPreferencesKey("recent_manga_v2")
+        val BOOKMARK_MANGA_KEY = stringPreferencesKey("bookmark_manga")
     }
 
     val baseUrl: Flow<String> = context.dataStore.data.map { prefs ->
@@ -59,6 +60,10 @@ class SettingsDataStore(private val context: Context) {
 
     val recentMangaV2: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[RECENT_MANGA_V2_KEY] ?: ""
+    }
+
+    val bookmarkManga: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[BOOKMARK_MANGA_KEY] ?: ""
     }
 
     suspend fun saveBaseUrl(url: String) {
@@ -103,6 +108,18 @@ class SettingsDataStore(private val context: Context) {
             val current = parseRecentMangaList(prefs[RECENT_MANGA_V2_KEY] ?: "")
             val updated = (listOf(item) + current.filter { it.mangaId != item.mangaId }).take(20)
             prefs[RECENT_MANGA_V2_KEY] = serializeRecentMangaList(updated)
+        }
+    }
+
+    suspend fun toggleBookmark(item: MangaItem) {
+        context.dataStore.edit { prefs ->
+            val current = parseMangaList(prefs[BOOKMARK_MANGA_KEY] ?: "")
+            val updated = if (current.any { it.id == item.id }) {
+                current.filter { it.id != item.id }
+            } else {
+                listOf(item) + current
+            }
+            prefs[BOOKMARK_MANGA_KEY] = serializeMangaList(updated)
         }
     }
 
@@ -155,5 +172,9 @@ class SettingsDataStore(private val context: Context) {
                 )
             } else null
         }
+    }
+
+    fun isBookmarked(mangaId: Int, bookmarkStr: String): Boolean {
+        return parseMangaList(bookmarkStr).any { it.id == mangaId }
     }
 }

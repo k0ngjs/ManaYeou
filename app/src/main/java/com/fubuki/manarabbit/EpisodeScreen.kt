@@ -22,6 +22,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 
 data class EpisodeItem(
     val id: Int,
@@ -48,7 +50,8 @@ fun EpisodeScreen(
     mangaId: Int,
     mangaName: String,
     onBack: () -> Unit,
-    onEpisodeClick: (Int, String, List<EpisodeItem>) -> Unit = { _, _, _ -> }
+    onEpisodeClick: (Int, String, List<EpisodeItem>) -> Unit = { _, _, _ -> },
+    onAuthNeeded: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
@@ -62,6 +65,8 @@ fun EpisodeScreen(
     var pageData by remember { mutableStateOf(EpisodePageData()) }
     var isLoading by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
+    val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
+    val isBookmarked = store.isBookmarked(mangaId, bookmarkStr)
 
     LaunchedEffect(mangaId, baseUrl) {
         if (baseUrl.isNotEmpty()) {
@@ -70,6 +75,7 @@ fun EpisodeScreen(
                 val result = fetchEpisodePageData(baseUrl, mangaId, cfCookies)
                 if (result.episodes.isEmpty()) {
                     status = "에피소드를 불러오지 못했습니다"
+                    onAuthNeeded()
                 } else {
                     pageData = result
                     // 최근 본 만화 저장
@@ -128,10 +134,35 @@ fun EpisodeScreen(
                             MangaInfoHeader(
                                 detail = pageData.detail,
                                 baseUrl = baseUrl,
+                                isBookmarked = isBookmarked,
                                 onFirstEpisodeClick = {
                                     val first = pageData.episodes.lastOrNull()
                                     if (first != null) {
+                                        scope.launch {
+                                            store.saveRecentMangaV2(
+                                                RecentMangaItem(
+                                                    mangaId = mangaId,
+                                                    mangaName = pageData.detail.name,
+                                                    thumb = pageData.detail.thumb,
+                                                    referer = baseUrl,
+                                                    lastEpisodeId = first.id,
+                                                    lastEpisodeTitle = first.title
+                                                )
+                                            )
+                                        }
                                         onEpisodeClick(first.id, first.title, pageData.episodes)
+                                    }
+                                },
+                                onBookmarkClick = {
+                                    scope.launch {
+                                        store.toggleBookmark(
+                                            MangaItem(
+                                                id = mangaId,
+                                                name = pageData.detail.name,
+                                                thumb = pageData.detail.thumb,
+                                                referer = baseUrl
+                                            )
+                                        )
                                     }
                                 }
                             )
@@ -180,7 +211,9 @@ fun EpisodeScreen(
 fun MangaInfoHeader(
     detail: MangaDetail,
     baseUrl: String,
-    onFirstEpisodeClick: () -> Unit
+    isBookmarked: Boolean = false,
+    onFirstEpisodeClick: () -> Unit,
+    onBookmarkClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     Row(
@@ -240,11 +273,20 @@ fun MangaInfoHeader(
                 )
             }
             Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = onFirstEpisodeClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("첫화보기")
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onFirstEpisodeClick,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("첫화보기")
+                }
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onBookmarkClick) {
+                    Icon(
+                        if (isBookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                        contentDescription = "북마크"
+                    )
+                }
             }
         }
     }

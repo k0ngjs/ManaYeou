@@ -32,7 +32,8 @@ data class HomeData(
 fun HomeScreen(
     onMangaClick: (MangaItem) -> Unit = {},
     onMoreUpdated: (List<MangaItem>) -> Unit = {},
-    onMoreRecent: (List<RecentMangaItem>) -> Unit = {}
+    onMoreRecent: (List<RecentMangaItem>) -> Unit = {},
+    onAuthNeeded: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
@@ -55,6 +56,7 @@ fun HomeScreen(
             val result = fetchHomeData(baseUrl, cfCookies)
             if (result.updated.isEmpty() && result.popular.isEmpty()) {
                 status = "목록을 불러오지 못했습니다"
+                if (cfCookies.isEmpty()) onAuthNeeded()  // 쿠키가 없을 때만 인증 요청
             } else {
                 homeData = result
             }

@@ -16,3 +16,10 @@ data class RecentMangaItem(
     val lastEpisodeId: Int,
     val lastEpisodeTitle: String
 )
+
+data class BookmarkItem(
+    val manga: MangaItem,
+    val latestEpisodeId: Int = 0,
+    val latestEpisodeTitle: String = "",
+    val latestEpisodeDate: String = ""
+)

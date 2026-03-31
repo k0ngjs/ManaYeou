@@ -2,6 +2,7 @@ package com.fubuki.manarabbit
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -50,9 +51,53 @@ fun MainScreen() {
     val store = remember { SettingsDataStore(context) }
     val baseUrl by store.baseUrl.collectAsState(initial = "")
     var recentListData by remember { mutableStateOf<List<RecentMangaItem>?>(null) }
+    var showAuthDialog by remember { mutableStateOf(false) }
+    val recentMangaStr by store.recentMangaV2.collectAsState(initial = "")
+    var bookmarkListData by remember { mutableStateOf<List<MangaItem>?>(null) }
+    val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
 
-    // 클라우드플레어 인증 화면
-    if (showCloudflareScreen) {
+    BackHandler(enabled = selectedEpisode != null) {
+        selectedEpisode = null
+    }
+    BackHandler(enabled = selectedManga != null) {
+        selectedManga = null
+    }
+    BackHandler(enabled = moreListData != null) {
+        moreListData = null
+    }
+    BackHandler(enabled = recentListData != null) {
+        recentListData = null
+    }
+    BackHandler(enabled = showCloudflareScreen) {
+        showCloudflareScreen = false
+    }
+    BackHandler(enabled = bookmarkListData != null) {
+        bookmarkListData = null
+    }
+
+    if (showAuthDialog) {
+        AlertDialog(
+            onDismissRequest = { showAuthDialog = false },
+            title = { Text("접속 오류") },
+            text = { Text("콘텐츠를 불러오지 못했습니다.\nCAPTCHA 인증이 필요할 수 있어요.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAuthDialog = false
+                    showCloudflareScreen = true
+                }) {
+                    Text("CAPTCHA 인증")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAuthDialog = false }) {
+                    Text("닫기")
+                }
+            }
+        )
+    }
+
+    // CAPTCHA 인증 다이얼로그
+    if (showCloudflareScreen && baseUrl.isNotEmpty()) {
         CloudflareScreen(
             url = baseUrl,
             onCookieReceived = { cookies ->
@@ -76,7 +121,8 @@ fun MainScreen() {
             onList = { seriesId ->
                 selectedEpisode = null
                 selectedManga = MangaItem(seriesId, "", "", "")
-            }
+            },
+            onAuthNeeded = { showAuthDialog = true }
         )
         return
     }
@@ -89,7 +135,8 @@ fun MainScreen() {
             onBack = { selectedManga = null },
             onEpisodeClick = { id, title, list ->
                 selectedEpisode = Triple(id, title, list)
-            }
+            },
+            onAuthNeeded = { showAuthDialog = true }
         )
         return
     }
@@ -102,6 +149,18 @@ fun MainScreen() {
                 selectedManga = MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)
             },
             onBack = { recentListData = null }
+        )
+        return
+    }
+
+    if (bookmarkListData != null) {
+        BookmarkListScreen(
+            items = bookmarkListData!!,
+            onMangaClick = { item ->
+                bookmarkListData = null
+                selectedManga = item
+            },
+            onBack = { bookmarkListData = null }
         )
         return
     }
@@ -164,13 +223,13 @@ fun MainScreen() {
                         }
                     },
                     onMoreUpdated = { moreListData = Pair("최신 만화", it) },
-                    onMoreRecent = { recentListData = it }
+                    onMoreRecent = { recentListData = it },
+                    onAuthNeeded = { showAuthDialog = true }
                 )
                 1 -> Text("검색 화면")
                 2 -> MyScreen(
-                    onMangaClick = { item ->
-                        selectedManga = MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)
-                    }
+                    onRecentClick = { recentListData = store.parseRecentMangaList(recentMangaStr) },
+                    onFavoriteClick = { bookmarkListData = store.parseMangaList(bookmarkStr) }
                 )
                 3 -> SettingsScreen(onCfAuthClick = { showCloudflareScreen = true })
             }
@@ -194,14 +253,12 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("설정", style = MaterialTheme.typography.headlineMedium)
-
         Text("서버 주소", style = MaterialTheme.typography.labelLarge)
 
         OutlinedTextField(
             value = urlInput,
             onValueChange = { urlInput = it },
-            label = { Text("예: https://example.com") },
+            placeholder = { Text("예: https://example.com", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -213,28 +270,29 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
             Text("저장")
         }
 
-        if (savedUrl.isNotEmpty()) {
-            Text(
-                "저장된 주소: $savedUrl",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-
         Spacer(Modifier.height(4.dp))
         HorizontalDivider()
         Spacer(Modifier.height(4.dp))
 
-        Text("클라우드플레어 인증", style = MaterialTheme.typography.labelLarge)
+        Text("CAPTCHA", style = MaterialTheme.typography.labelLarge)
         Text(
-            "서버 접속이 안 될 때 아래 버튼을 눌러 인증해주세요",
+            "서버 접속이 안될 때 인증해주세요.",
             style = MaterialTheme.typography.bodySmall
         )
         Button(
             onClick = onCfAuthClick,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = savedUrl.isNotEmpty()
         ) {
-            Text("클라우드플레어 인증")
+            Text("인증")
+        }
+
+        if (savedUrl.isEmpty()) {
+            Text(
+                "서버 주소를 먼저 입력해주세요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
         }
 
         Spacer(Modifier.height(4.dp))
