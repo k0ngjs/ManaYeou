@@ -47,13 +47,13 @@ fun MainScreen() {
     var selectedEpisode by remember { mutableStateOf<Triple<Int, String, List<EpisodeItem>>?>(null) }
     var moreListData by remember { mutableStateOf<Pair<String, List<MangaItem>>?>(null) }
     var showCloudflareScreen by remember { mutableStateOf(false) }
+    var showAuthDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
     val baseUrl by store.baseUrl.collectAsState(initial = "")
     var recentListData by remember { mutableStateOf<List<RecentMangaItem>?>(null) }
-    var showAuthDialog by remember { mutableStateOf(false) }
-    val recentMangaStr by store.recentMangaV2.collectAsState(initial = "")
     var bookmarkListData by remember { mutableStateOf<List<MangaItem>?>(null) }
+    val recentMangaStr by store.recentMangaV2.collectAsState(initial = "")
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
 
     BackHandler(enabled = selectedEpisode != null) {
@@ -68,13 +68,14 @@ fun MainScreen() {
     BackHandler(enabled = recentListData != null) {
         recentListData = null
     }
-    BackHandler(enabled = showCloudflareScreen) {
-        showCloudflareScreen = false
-    }
     BackHandler(enabled = bookmarkListData != null) {
         bookmarkListData = null
     }
+    BackHandler(enabled = showCloudflareScreen) {
+        showCloudflareScreen = false
+    }
 
+    // 인증 다이얼로그
     if (showAuthDialog) {
         AlertDialog(
             onDismissRequest = { showAuthDialog = false },
@@ -96,7 +97,7 @@ fun MainScreen() {
         )
     }
 
-    // CAPTCHA 인증 다이얼로그
+    // CAPTCHA 인증 화면
     if (showCloudflareScreen && baseUrl.isNotEmpty()) {
         CloudflareScreen(
             url = baseUrl,
@@ -123,58 +124,6 @@ fun MainScreen() {
                 selectedManga = MangaItem(seriesId, "", "", "")
             },
             onAuthNeeded = { showAuthDialog = true }
-        )
-        return
-    }
-
-    // 에피소드 목록 화면
-    if (selectedManga != null) {
-        EpisodeScreen(
-            mangaId = selectedManga!!.id,
-            mangaName = selectedManga!!.name,
-            onBack = { selectedManga = null },
-            onEpisodeClick = { id, title, list ->
-                selectedEpisode = Triple(id, title, list)
-            },
-            onAuthNeeded = { showAuthDialog = true }
-        )
-        return
-    }
-
-    if (recentListData != null) {
-        RecentListScreen(
-            items = recentListData!!,
-            onMangaClick = { item ->
-                recentListData = null
-                selectedManga = MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)
-            },
-            onBack = { recentListData = null }
-        )
-        return
-    }
-
-    if (bookmarkListData != null) {
-        BookmarkListScreen(
-            items = bookmarkListData!!,
-            onMangaClick = { item ->
-                bookmarkListData = null
-                selectedManga = item
-            },
-            onBack = { bookmarkListData = null }
-        )
-        return
-    }
-
-    // 더보기 화면
-    if (moreListData != null) {
-        MoreListScreen(
-            title = moreListData!!.first,
-            items = moreListData!!.second,
-            onMangaClick = {
-                selectedManga = it
-                moreListData = null
-            },
-            onBack = { moreListData = null }
         )
         return
     }
@@ -209,29 +158,66 @@ fun MainScreen() {
             }
         }
     ) { padding ->
-        Box(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentAlignment = Alignment.Center
-        ) {
-            when (selectedTab) {
-                0 -> HomeScreen(
-                    onMangaClick = { manga ->
-                        if (manga.isEpisode) {
-                            selectedEpisode = Triple(manga.id, manga.name, emptyList())
-                        } else {
-                            selectedManga = manga
-                        }
-                    },
-                    onMoreUpdated = { moreListData = Pair("최신 만화", it) },
-                    onMoreRecent = { recentListData = it },
-                    onAuthNeeded = { showAuthDialog = true }
-                )
-                1 -> Text("검색 화면")
-                2 -> MyScreen(
-                    onRecentClick = { recentListData = store.parseRecentMangaList(recentMangaStr) },
-                    onFavoriteClick = { bookmarkListData = store.parseMangaList(bookmarkStr) }
-                )
-                3 -> SettingsScreen(onCfAuthClick = { showCloudflareScreen = true })
+        when {
+            selectedManga != null -> EpisodeScreen(
+                mangaId = selectedManga!!.id,
+                mangaName = selectedManga!!.name,
+                onBack = { selectedManga = null },
+                onEpisodeClick = { id, title, list ->
+                    selectedEpisode = Triple(id, title, list)
+                },
+                onAuthNeeded = { showAuthDialog = true }
+            )
+            moreListData != null -> MoreListScreen(
+                title = moreListData!!.first,
+                items = moreListData!!.second,
+                onMangaClick = {
+                    selectedManga = it
+                    moreListData = null
+                },
+                onBack = { moreListData = null }
+            )
+            recentListData != null -> RecentListScreen(
+                items = recentListData!!,
+                onMangaClick = { item ->
+                    recentListData = null
+                    selectedManga = MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)
+                },
+                onBack = { recentListData = null }
+            )
+            bookmarkListData != null -> BookmarkListScreen(
+                items = bookmarkListData!!,
+                onMangaClick = { item ->
+                    bookmarkListData = null
+                    selectedManga = item
+                },
+                onBack = { bookmarkListData = null }
+            )
+            else -> Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                when (selectedTab) {
+                    0 -> HomeScreen(
+                        onMangaClick = { manga ->
+                            if (manga.isEpisode) {
+                                selectedEpisode = Triple(manga.id, manga.name, emptyList())
+                            } else {
+                                selectedManga = manga
+                            }
+                        },
+                        onMoreUpdated = { moreListData = Pair("최신 만화", it) },
+                        onMoreRecent = { recentListData = store.parseRecentMangaList(recentMangaStr) },
+                        onMoreBookmark = { bookmarkListData = store.parseMangaList(bookmarkStr) },
+                        onAuthNeeded = { showAuthDialog = true }
+                    )
+                    1 -> Text("검색 화면")
+                    2 -> MyScreen(
+                        onRecentClick = { recentListData = store.parseRecentMangaList(recentMangaStr) },
+                        onFavoriteClick = { bookmarkListData = store.parseMangaList(bookmarkStr) }
+                    )
+                    3 -> SettingsScreen(onCfAuthClick = { showCloudflareScreen = true })
+                }
             }
         }
     }

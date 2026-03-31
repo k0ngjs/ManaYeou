@@ -33,6 +33,7 @@ fun HomeScreen(
     onMangaClick: (MangaItem) -> Unit = {},
     onMoreUpdated: (List<MangaItem>) -> Unit = {},
     onMoreRecent: (List<RecentMangaItem>) -> Unit = {},
+    onMoreBookmark: (List<MangaItem>) -> Unit = {},
     onAuthNeeded: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -47,6 +48,9 @@ fun HomeScreen(
     var homeData by remember { mutableStateOf(HomeData()) }
     var status by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
+
+    val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
+    val bookmarkManga = remember(bookmarkStr) { store.parseMangaList(bookmarkStr) }
 
     LaunchedEffect(baseUrl) {
         if (baseUrl.isEmpty()) return@LaunchedEffect
@@ -78,7 +82,7 @@ fun HomeScreen(
                                 contentPadding = PaddingValues(horizontal = 12.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(homeData.updated.take(10)) { item ->
+                                items(homeData.updated.take(8)) { item ->
                                     MangaCard(item, onClick = { onMangaClick(item) })
                                 }
                             }
@@ -93,18 +97,31 @@ fun HomeScreen(
                                 contentPadding = PaddingValues(horizontal = 12.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(recentManga.take(5)) { item ->
+                                items(recentManga.take(8)) { item ->
                                     RecentMangaCard(item, onClick = { onMangaClick(MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)) })
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
+                        }
+                    }
+
+                    // 북마크
+                    if (bookmarkManga.isNotEmpty()) {
+                        item {
+                            SectionTitle("북마크", onMoreClick = { onMoreBookmark(bookmarkManga) })
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(bookmarkManga.take(8)) { item ->
+                                    MangaCard(item, onClick = { onMangaClick(item) })
+                                }
+                            }
                         }
                     }
 
                     // 인기 만화
                     if (homeData.popular.isNotEmpty()) {
                         item {
-                            Spacer(Modifier.height(16.dp))
                             SectionTitle("인기 만화")
                         }
                         items(homeData.popular) { item ->
