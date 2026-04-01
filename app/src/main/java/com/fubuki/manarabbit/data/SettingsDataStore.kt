@@ -1,4 +1,4 @@
-package com.fubuki.manarabbit
+package com.fubuki.manarabbit.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -22,7 +22,6 @@ class SettingsDataStore(private val context: Context) {
         val VIEWER_DOUBLE_FIRST_KEY = stringPreferencesKey("viewer_double_first")
         val VIEWER_DIRECTION_KEY = stringPreferencesKey("viewer_direction")
         val RECENT_MANGA_KEY = stringPreferencesKey("recent_manga")
-        val RECENT_MANGA_V2_KEY = stringPreferencesKey("recent_manga_v2")
         val BOOKMARK_MANGA_KEY = stringPreferencesKey("bookmark_manga")
     }
 
@@ -58,10 +57,6 @@ class SettingsDataStore(private val context: Context) {
         prefs[RECENT_MANGA_KEY] ?: ""
     }
 
-    val recentMangaV2: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[RECENT_MANGA_V2_KEY] ?: ""
-    }
-
     val bookmarkManga: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[BOOKMARK_MANGA_KEY] ?: ""
     }
@@ -95,44 +90,36 @@ class SettingsDataStore(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[VIEWER_DIRECTION_KEY] = value }
     }
 
-    suspend fun saveRecentManga(item: MangaItem) {
+    suspend fun saveRecentManga(item: RecentManga) {
         context.dataStore.edit { prefs ->
             val current = parseMangaList(prefs[RECENT_MANGA_KEY] ?: "")
-            val updated = (listOf(item) + current.filter { it.id != item.id }).take(20)
-            prefs[RECENT_MANGA_KEY] = serializeMangaList(updated)
-        }
-    }
-
-    suspend fun saveRecentMangaV2(item: RecentMangaItem) {
-        context.dataStore.edit { prefs ->
-            val current = parseRecentMangaList(prefs[RECENT_MANGA_V2_KEY] ?: "")
             val updated = (listOf(item) + current.filter { it.mangaId != item.mangaId }).take(20)
-            prefs[RECENT_MANGA_V2_KEY] = serializeRecentMangaList(updated)
+            prefs[RECENT_MANGA_KEY] = serializeRecentMangaList(updated)
         }
     }
 
-    suspend fun toggleBookmark(item: MangaItem) {
+    suspend fun toggleBookmark(manga: Manga) {
         context.dataStore.edit { prefs ->
-            val current = parseMangaList(prefs[BOOKMARK_MANGA_KEY] ?: "")
-            val updated = if (current.any { it.id == item.id }) {
-                current.filter { it.id != item.id }
+            val current = parseBookmarkList(prefs[BOOKMARK_MANGA_KEY] ?: "")
+            val updated = if (current.any { it.id == manga.id }) {
+                current.filter { it.id != manga.id }
             } else {
-                listOf(item) + current
+                listOf(manga) + current
             }
-            prefs[BOOKMARK_MANGA_KEY] = serializeMangaList(updated)
+            prefs[BOOKMARK_MANGA_KEY] = serializeBookmarkList(updated)
         }
     }
 
-    fun serializeMangaList(list: List<MangaItem>): String {
-        return list.joinToString("|") { "${it.id},${it.name},${it.thumb},${it.referer}" }
+    fun serializeBookmarkList(list: List<Manga>): String {
+        return list.joinToString("|") { "${it.id}::${it.name}::${it.thumb}::${it.referer}" }
     }
 
-    fun parseMangaList(str: String): List<MangaItem> {
+    fun parseBookmarkList(str: String): List<Manga> {
         if (str.isEmpty()) return emptyList()
         return str.split("|").mapNotNull { item ->
-            val parts = item.split(",")
+            val parts = item.split("::")
             if (parts.size >= 4) {
-                MangaItem(
+                Manga(
                     id = parts[0].toIntOrNull() ?: return@mapNotNull null,
                     name = parts[1],
                     thumb = parts[2],
@@ -142,27 +129,18 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
-    fun parseCookies(cookieStr: String): Map<String, String> {
-        if (cookieStr.isEmpty()) return emptyMap()
-        return cookieStr.split(";").mapNotNull { s ->
-            val idx = s.indexOf("=")
-            if (idx > 0) s.substring(0, idx).trim() to s.substring(idx + 1).trim()
-            else null
-        }.toMap()
-    }
-
-    fun serializeRecentMangaList(list: List<RecentMangaItem>): String {
+    fun serializeRecentMangaList(list: List<RecentManga>): String {
         return list.joinToString("|") {
             "${it.mangaId}::${it.mangaName}::${it.thumb}::${it.referer}::${it.lastEpisodeId}::${it.lastEpisodeTitle}"
         }
     }
 
-    fun parseRecentMangaList(str: String): List<RecentMangaItem> {
+    fun parseMangaList(str: String): List<RecentManga> {
         if (str.isEmpty()) return emptyList()
         return str.split("|").mapNotNull { item ->
             val parts = item.split("::")
             if (parts.size >= 6) {
-                RecentMangaItem(
+                RecentManga(
                     mangaId = parts[0].toIntOrNull() ?: return@mapNotNull null,
                     mangaName = parts[1],
                     thumb = parts[2],
@@ -175,6 +153,6 @@ class SettingsDataStore(private val context: Context) {
     }
 
     fun isBookmarked(mangaId: Int, bookmarkStr: String): Boolean {
-        return parseMangaList(bookmarkStr).any { it.id == mangaId }
+        return parseBookmarkList(bookmarkStr).any { it.id == mangaId }
     }
 }

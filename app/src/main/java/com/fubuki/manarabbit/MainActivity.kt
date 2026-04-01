@@ -17,8 +17,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import com.fubuki.manarabbit.data.Manga
+import com.fubuki.manarabbit.data.RecentManga
+import com.fubuki.manarabbit.data.Episode
+import com.fubuki.manarabbit.data.HomeContent
+import com.fubuki.manarabbit.data.SettingsDataStore
+import com.fubuki.manarabbit.network.fetchHomeContent
+import com.fubuki.manarabbit.ui.auth.CloudflareScreen
+import com.fubuki.manarabbit.ui.episode.EpisodeScreen
+import com.fubuki.manarabbit.ui.home.HomeScreen
+import com.fubuki.manarabbit.ui.list.BookmarkListScreen
+import com.fubuki.manarabbit.ui.list.RecentListScreen
+import com.fubuki.manarabbit.ui.my.MyScreen
+import com.fubuki.manarabbit.ui.settings.SettingsScreen
 import com.fubuki.manarabbit.ui.theme.ManaRabbitTheme
+import com.fubuki.manarabbit.ui.update.UpdateListScreen
+import com.fubuki.manarabbit.ui.viewer.ViewerScreen
+import com.fubuki.manarabbit.ui.search.SearchScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -43,39 +58,50 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen() {
     var selectedTab by remember { mutableIntStateOf(0) }
-    var selectedManga by remember { mutableStateOf<MangaItem?>(null) }
-    var selectedEpisode by remember { mutableStateOf<Triple<Int, String, List<EpisodeItem>>?>(null) }
-    var moreListData by remember { mutableStateOf<Pair<String, List<MangaItem>>?>(null) }
+    var selectedManga by remember { mutableStateOf<Manga?>(null) }
+    var selectedEpisode by remember { mutableStateOf<Triple<Int, String, List<Episode>>?>(null) }
+    var updateListData by remember { mutableStateOf<Pair<String, List<Manga>>?>(null) }
     var showCloudflareScreen by remember { mutableStateOf(false) }
     var showAuthDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
     val baseUrl by store.baseUrl.collectAsState(initial = "")
-    var recentListData by remember { mutableStateOf<List<RecentMangaItem>?>(null) }
-    var bookmarkListData by remember { mutableStateOf<List<MangaItem>?>(null) }
-    val recentMangaStr by store.recentMangaV2.collectAsState(initial = "")
+    val cfCookies by store.cfCookies.collectAsState(initial = "")
+    var recentListData by remember { mutableStateOf<List<RecentManga>?>(null) }
+    var bookmarkListData by remember { mutableStateOf<List<Manga>?>(null) }
+    val recentMangaStr by store.recentManga.collectAsState(initial = "")
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
 
-    BackHandler(enabled = selectedEpisode != null) {
-        selectedEpisode = null
-    }
-    BackHandler(enabled = selectedManga != null) {
-        selectedManga = null
-    }
-    BackHandler(enabled = moreListData != null) {
-        moreListData = null
-    }
-    BackHandler(enabled = recentListData != null) {
-        recentListData = null
-    }
-    BackHandler(enabled = bookmarkListData != null) {
-        bookmarkListData = null
-    }
-    BackHandler(enabled = showCloudflareScreen) {
-        showCloudflareScreen = false
+    // 홈 데이터 캐싱
+    var homeContent by remember { mutableStateOf(HomeContent()) }
+    var homeLoading by remember { mutableStateOf(true) }
+    var homeStatus by remember { mutableStateOf("") }
+
+    suspend fun loadHomeContent() {
+        homeLoading = true
+        homeStatus = ""
+        val result = fetchHomeContent(baseUrl, cfCookies)
+        if (result.updated.isEmpty() && result.popular.isEmpty()) {
+            homeStatus = "목록을 불러오지 못했습니다"
+            if (cfCookies.isEmpty()) showAuthDialog = true
+        } else {
+            homeContent = result
+        }
+        homeLoading = false
     }
 
-    // 인증 다이얼로그
+    LaunchedEffect(baseUrl) {
+        if (baseUrl.isEmpty()) return@LaunchedEffect
+        loadHomeContent()
+    }
+
+    BackHandler(enabled = selectedEpisode != null) { selectedEpisode = null }
+    BackHandler(enabled = selectedManga != null) { selectedManga = null }
+    BackHandler(enabled = updateListData != null) { updateListData = null }
+    BackHandler(enabled = recentListData != null) { recentListData = null }
+    BackHandler(enabled = bookmarkListData != null) { bookmarkListData = null }
+    BackHandler(enabled = showCloudflareScreen) { showCloudflareScreen = false }
+
     if (showAuthDialog) {
         AlertDialog(
             onDismissRequest = { showAuthDialog = false },
@@ -85,19 +111,14 @@ fun MainScreen() {
                 TextButton(onClick = {
                     showAuthDialog = false
                     showCloudflareScreen = true
-                }) {
-                    Text("CAPTCHA 인증")
-                }
+                }) { Text("CAPTCHA 인증") }
             },
             dismissButton = {
-                TextButton(onClick = { showAuthDialog = false }) {
-                    Text("닫기")
-                }
+                TextButton(onClick = { showAuthDialog = false }) { Text("닫기") }
             }
         )
     }
 
-    // CAPTCHA 인증 화면
     if (showCloudflareScreen && baseUrl.isNotEmpty()) {
         CloudflareScreen(
             url = baseUrl,
@@ -112,7 +133,6 @@ fun MainScreen() {
         return
     }
 
-    // 뷰어 화면
     if (selectedEpisode != null) {
         ViewerScreen(
             episodeId = selectedEpisode!!.first,
@@ -121,178 +141,141 @@ fun MainScreen() {
             onBack = { selectedEpisode = null },
             onList = { seriesId ->
                 selectedEpisode = null
-                selectedManga = MangaItem(seriesId, "", "", "")
+                selectedManga = Manga(seriesId, "", "", "")
             },
             onAuthNeeded = { showAuthDialog = true }
         )
         return
     }
 
+    val scope = rememberCoroutineScope()
+
     Scaffold(
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = {
+                        selectedTab = 0
+                        selectedManga = null
+                        updateListData = null
+                        recentListData = null
+                        bookmarkListData = null
+                    },
                     icon = { Icon(Icons.Filled.Home, "홈") },
                     label = { Text("홈") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = {
+                        selectedTab = 1
+                        selectedManga = null
+                        updateListData = null
+                        recentListData = null
+                        bookmarkListData = null
+                    },
                     icon = { Icon(Icons.Filled.Search, "검색") },
                     label = { Text("검색") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    onClick = {
+                        selectedTab = 2
+                        selectedManga = null
+                        updateListData = null
+                        recentListData = null
+                        bookmarkListData = null
+                    },
                     icon = { Icon(Icons.Filled.Person, "마이") },
                     label = { Text("마이") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
+                    onClick = {
+                        selectedTab = 3
+                        selectedManga = null
+                        updateListData = null
+                        recentListData = null
+                        bookmarkListData = null
+                    },
                     icon = { Icon(Icons.Filled.Settings, "설정") },
                     label = { Text("설정") }
                 )
             }
         }
     ) { padding ->
-        when {
-            selectedManga != null -> EpisodeScreen(
-                mangaId = selectedManga!!.id,
-                mangaName = selectedManga!!.name,
-                onBack = { selectedManga = null },
-                onEpisodeClick = { id, title, list ->
-                    selectedEpisode = Triple(id, title, list)
-                },
-                onAuthNeeded = { showAuthDialog = true }
-            )
-            moreListData != null -> MoreListScreen(
-                title = moreListData!!.first,
-                items = moreListData!!.second,
-                onMangaClick = {
-                    selectedManga = it
-                    moreListData = null
-                },
-                onBack = { moreListData = null }
-            )
-            recentListData != null -> RecentListScreen(
-                items = recentListData!!,
-                onMangaClick = { item ->
-                    recentListData = null
-                    selectedManga = MangaItem(item.mangaId, item.mangaName, item.thumb, item.referer)
-                },
-                onBack = { recentListData = null }
-            )
-            bookmarkListData != null -> BookmarkListScreen(
-                items = bookmarkListData!!,
-                onMangaClick = { item ->
-                    bookmarkListData = null
-                    selectedManga = item
-                },
-                onBack = { bookmarkListData = null }
-            )
-            else -> Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                when (selectedTab) {
-                    0 -> HomeScreen(
-                        onMangaClick = { manga ->
-                            if (manga.isEpisode) {
-                                selectedEpisode = Triple(manga.id, manga.name, emptyList())
-                            } else {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            when {
+                selectedManga != null -> EpisodeScreen(
+                    mangaId = selectedManga!!.id,
+                    mangaName = selectedManga!!.name,
+                    onBack = { selectedManga = null },
+                    onEpisodeClick = { id, title, list ->
+                        selectedEpisode = Triple(id, title, list)
+                    },
+                    onAuthNeeded = { showAuthDialog = true }
+                )
+                updateListData != null -> UpdateListScreen(
+                    title = updateListData!!.first,
+                    items = updateListData!!.second,
+                    onMangaClick = {
+                        selectedManga = it
+                        updateListData = null
+                    },
+                    onBack = { updateListData = null }
+                )
+                recentListData != null -> RecentListScreen(
+                    items = recentListData!!,
+                    onMangaClick = { manga ->
+                        recentListData = null
+                        selectedManga = Manga(manga.mangaId, manga.mangaName, manga.thumb, manga.referer)
+                    },
+                    onBack = { recentListData = null }
+                )
+                bookmarkListData != null -> BookmarkListScreen(
+                    items = bookmarkListData!!,
+                    onMangaClick = { manga ->
+                        bookmarkListData = null
+                        selectedManga = manga
+                    },
+                    onBack = { bookmarkListData = null }
+                )
+                else -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when (selectedTab) {
+                        0 -> HomeScreen(
+                            homeContent = homeContent,
+                            isLoading = homeLoading,
+                            status = homeStatus,
+                            onRefresh = {
+                                scope.launch { loadHomeContent() }
+                            },
+                            onMangaClick = { manga ->
+                                if (manga.isEpisode) {
+                                    selectedEpisode = Triple(manga.id, manga.name, emptyList())
+                                } else {
+                                    selectedManga = manga
+                                }
+                            },
+                            onMoreUpdated = { updateListData = Pair("최신 만화", it) },
+                            onMoreRecent = { recentListData = store.parseMangaList(recentMangaStr) },
+                            onMoreBookmark = { bookmarkListData = store.parseBookmarkList(bookmarkStr) },
+                            onAuthNeeded = { showAuthDialog = true }
+                        )
+                        1 -> SearchScreen(
+                            onMangaClick = { manga ->
                                 selectedManga = manga
                             }
-                        },
-                        onMoreUpdated = { moreListData = Pair("최신 만화", it) },
-                        onMoreRecent = { recentListData = store.parseRecentMangaList(recentMangaStr) },
-                        onMoreBookmark = { bookmarkListData = store.parseMangaList(bookmarkStr) },
-                        onAuthNeeded = { showAuthDialog = true }
-                    )
-                    1 -> Text("검색 화면")
-                    2 -> MyScreen(
-                        onRecentClick = { recentListData = store.parseRecentMangaList(recentMangaStr) },
-                        onFavoriteClick = { bookmarkListData = store.parseMangaList(bookmarkStr) }
-                    )
-                    3 -> SettingsScreen(onCfAuthClick = { showCloudflareScreen = true })
+                        )
+                        2 -> MyScreen(
+                            onRecentClick = { recentListData = store.parseMangaList(recentMangaStr) },
+                            onBookmarkClick = { bookmarkListData = store.parseBookmarkList(bookmarkStr) }
+                        )
+                        3 -> SettingsScreen(onCfAuthClick = { showCloudflareScreen = true })
+                    }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
-    val context = LocalContext.current
-    val store = remember { SettingsDataStore(context) }
-    val scope = rememberCoroutineScope()
-
-    val savedUrl by store.baseUrl.collectAsState(initial = "")
-    var urlInput by remember(savedUrl) { mutableStateOf(savedUrl) }
-    val theme by store.theme.collectAsState(initial = "system")
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("서버 주소", style = MaterialTheme.typography.labelLarge)
-
-        OutlinedTextField(
-            value = urlInput,
-            onValueChange = { urlInput = it },
-            placeholder = { Text("예: https://example.com", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Button(
-            onClick = { scope.launch { store.saveBaseUrl(urlInput) } },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("저장")
-        }
-
-        Spacer(Modifier.height(4.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(4.dp))
-
-        Text("CAPTCHA", style = MaterialTheme.typography.labelLarge)
-        Text(
-            "서버 접속이 안될 때 인증해주세요.",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Button(
-            onClick = onCfAuthClick,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = savedUrl.isNotEmpty()
-        ) {
-            Text("인증")
-        }
-
-        if (savedUrl.isEmpty()) {
-            Text(
-                "서버 주소를 먼저 입력해주세요",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-
-        Spacer(Modifier.height(4.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(4.dp))
-
-        Text("테마", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("system" to "시스템", "light" to "라이트", "dark" to "다크").forEach { (value, label) ->
-                FilterChip(
-                    selected = theme == value,
-                    onClick = { scope.launch { store.saveTheme(value) } },
-                    label = { Text(label) }
-                )
             }
         }
     }

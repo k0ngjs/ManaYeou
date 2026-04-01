@@ -1,4 +1,4 @@
-package com.fubuki.manarabbit
+package com.fubuki.manarabbit.ui.update
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,13 +16,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.fubuki.manarabbit.data.Manga
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreListScreen(
+fun UpdateListScreen(
     title: String,
-    items: List<MangaItem>,
-    onMangaClick: (MangaItem) -> Unit,
+    items: List<Manga>,
+    onMangaClick: (Manga) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -43,30 +44,30 @@ fun MoreListScreen(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(vertical = 4.dp)
         ) {
-            items(items) { item ->
+            items(items) { manga ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onMangaClick(item) }
+                        .clickable { onMangaClick(manga) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
-                                .data(item.thumb)
-                                .addHeader("Referer", item.referer)
+                                .data(manga.thumb)
+                                .addHeader("Referer", manga.referer)
                                 .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
                                 .crossfade(true)
                                 .build(),
-                            contentDescription = item.name,
+                            contentDescription = manga.name,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
                     }
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = item.name,
+                        text = manga.name,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,

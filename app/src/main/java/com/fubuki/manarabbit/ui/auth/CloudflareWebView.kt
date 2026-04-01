@@ -1,4 +1,4 @@
-package com.fubuki.manarabbit
+package com.fubuki.manarabbit.ui.auth
 
 import android.annotation.SuppressLint
 import android.webkit.CookieManager
@@ -86,11 +86,9 @@ fun CloudflareScreen(
                             WebView(context).apply {
                                 val cookieManager = CookieManager.getInstance()
                                 cookieManager.setAcceptCookie(true)
-
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.userAgentString = "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
-
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView, resUrl: String) {
                                         statusText = if (resUrl.contains("captcha")) {
@@ -98,6 +96,14 @@ fun CloudflareScreen(
                                         } else {
                                             "인증 완료 후 완료 버튼을 눌러주세요"
                                         }
+                                        // 광고 제거
+                                        view.evaluateJavascript("""
+        (function() {
+            document.querySelectorAll('[class*="id_bbn"]').forEach(function(el) {
+                el.style.display = 'none';
+            });
+        })();
+    """.trimIndent(), null)
                                         super.onPageFinished(view, resUrl)
                                     }
                                 }
