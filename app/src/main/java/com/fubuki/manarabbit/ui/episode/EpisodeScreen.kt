@@ -25,6 +25,7 @@ import com.fubuki.manarabbit.data.MangaInfo
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchMangaDetail
+import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -33,6 +34,8 @@ import kotlinx.coroutines.launch
 fun EpisodeScreen(
     mangaId: Int,
     mangaName: String,
+    cachedDetail: MangaDetail = MangaDetail(),
+    onDetailLoaded: (MangaDetail) -> Unit = {},
     onBack: () -> Unit,
     onEpisodeClick: (Int, String, List<Episode>) -> Unit = { _, _, _ -> },
     onAuthNeeded: () -> Unit = {}
@@ -46,37 +49,41 @@ fun EpisodeScreen(
     val recentMangaStr by store.recentManga.collectAsState(initial = "")
     val recentMangaList = remember(recentMangaStr) { store.parseMangaList(recentMangaStr) }
     val lastEpisodeId = recentMangaList.find { it.mangaId == mangaId }?.lastEpisodeId
-    var mangaDetail by remember { mutableStateOf(MangaDetail()) }
-    var isLoading by remember { mutableStateOf(true) }
+    var mangaDetail by remember { mutableStateOf(cachedDetail) }
+    var isLoading by remember { mutableStateOf(cachedDetail.episodes.isEmpty()) }
+    var isRefreshing by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
     val isBookmarked = store.isBookmarked(mangaId, bookmarkStr)
 
-    LaunchedEffect(mangaId, baseUrl) {
-        if (baseUrl.isNotEmpty()) {
-            isLoading = true
-            scope.launch {
-                val result = fetchMangaDetail(baseUrl, mangaId, cfCookies)
-                if (result.episodes.isEmpty()) {
-                    status = "에피소드를 불러오지 못했습니다"
-                    onAuthNeeded()
-                } else {
-                    mangaDetail = result
-                    val existing = store.parseMangaList(store.recentManga.first())
-                        .find { it.mangaId == mangaId }
-                    store.saveRecentManga(
-                        RecentManga(
-                            mangaId = mangaId,
-                            mangaName = result.info.name,
-                            thumb = result.info.thumb,
-                            referer = baseUrl,
-                            lastEpisodeId = existing?.lastEpisodeId ?: 0,
-                            lastEpisodeTitle = existing?.lastEpisodeTitle ?: ""
-                        )
+    suspend fun loadDetail(refresh: Boolean = false) {
+        if (refresh) isRefreshing = true else isLoading = true
+        status = ""
+        val result = fetchMangaDetail(baseUrl, mangaId, cfCookies)
+        if (result.episodes.isEmpty()) {
+            status = "에피소드를 불러오지 못했습니다"
+            onAuthNeeded()
+        } else {
+            mangaDetail = result
+            onDetailLoaded(result)
+            val existing = store.parseMangaList(store.recentManga.first())
+                .find { it.mangaId == mangaId }
+            if (existing != null) {
+                store.saveRecentManga(
+                    existing.copy(
+                        mangaName = result.info.name,
+                        thumb = result.info.thumb,
+                        referer = baseUrl
                     )
-                }
-                isLoading = false
+                )
             }
+        }
+        if (refresh) isRefreshing = false else isLoading = false
+    }
+
+    LaunchedEffect(mangaId, baseUrl) {
+        if (baseUrl.isNotEmpty() && cachedDetail.episodes.isEmpty()) {
+            loadDetail()
         }
     }
 
@@ -102,20 +109,13 @@ fun EpisodeScreen(
                     Text(status)
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = {
-                        isLoading = true
-                        status = ""
-                        scope.launch {
-                            val result = fetchMangaDetail(baseUrl, mangaId, cfCookies)
-                            if (result.episodes.isEmpty()) {
-                                status = "에피소드를 불러오지 못했습니다"
-                            } else {
-                                mangaDetail = result
-                            }
-                            isLoading = false
-                        }
+                        scope.launch { loadDetail() }
                     }) { Text("재시도") }
                 }
-                else -> {
+                else -> PullToRefreshWrapper(
+                    onRefresh = { loadDetail(refresh = true) },
+                    modifier = Modifier.fillMaxSize()
+                ) {
                     LazyColumn {
                         item {
                             MangaInfoHeader(

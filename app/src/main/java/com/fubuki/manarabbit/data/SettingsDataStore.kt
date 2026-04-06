@@ -110,6 +110,18 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    suspend fun saveRecentMangaList(list: List<RecentManga>) {
+        context.dataStore.edit { prefs ->
+            prefs[RECENT_MANGA_KEY] = serializeRecentMangaList(list)
+        }
+    }
+
+    suspend fun saveBookmarkList(list: List<Manga>) {
+        context.dataStore.edit { prefs ->
+            prefs[BOOKMARK_MANGA_KEY] = serializeBookmarkList(list)
+        }
+    }
+
     fun serializeBookmarkList(list: List<Manga>): String {
         return list.joinToString("|") { "${it.id}::${it.name}::${it.thumb}::${it.referer}" }
     }

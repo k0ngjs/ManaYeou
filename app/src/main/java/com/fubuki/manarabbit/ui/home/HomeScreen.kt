@@ -6,8 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,14 +20,14 @@ import com.fubuki.manarabbit.data.HomeContent
 import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
+import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     homeContent: HomeContent,
     isLoading: Boolean,
     status: String,
-    onRefresh: () -> Unit = {},
+    onRefresh: suspend () -> Unit = {},
     onMangaClick: (Manga) -> Unit = {},
     onMoreUpdated: (List<Manga>) -> Unit = {},
     onMoreRecent: (List<RecentManga>) -> Unit = {},
@@ -44,20 +42,8 @@ fun HomeScreen(
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
     val bookmarkManga = remember(bookmarkStr) { store.parseBookmarkList(bookmarkStr) }
 
-    val pullRefreshState = rememberPullToRefreshState()
-    var isRefreshing by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isRefreshing) {
-        if (isRefreshing) {
-            onRefresh()
-            isRefreshing = false
-        }
-    }
-
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = { isRefreshing = true },
-        state = pullRefreshState,
+    PullToRefreshWrapper(
+        onRefresh = { onRefresh() },
         modifier = Modifier.fillMaxSize()
     ) {
         when {
@@ -65,7 +51,6 @@ fun HomeScreen(
             status.isNotEmpty() -> Text(status, modifier = Modifier.align(Alignment.Center))
             else -> {
                 LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
-                    // 최신 만화
                     if (homeContent.updated.isNotEmpty()) {
                         item {
                             SectionTitle("최신 만화", onMoreClick = { onMoreUpdated(homeContent.updated) })
@@ -80,7 +65,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // 최근 본 만화
                     if (recentManga.isNotEmpty()) {
                         item {
                             SectionTitle("최근 본 만화", onMoreClick = { onMoreRecent(recentManga) })
@@ -94,14 +78,11 @@ fun HomeScreen(
                                     })
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
                         }
                     }
 
-                    // 북마크
                     if (bookmarkManga.isNotEmpty()) {
                         item {
-                            Spacer(Modifier.height(16.dp))
                             SectionTitle("북마크", onMoreClick = { onMoreBookmark(bookmarkManga) })
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 12.dp),
@@ -114,10 +95,8 @@ fun HomeScreen(
                         }
                     }
 
-                    // 인기 만화
                     if (homeContent.popular.isNotEmpty()) {
                         item {
-                            Spacer(Modifier.height(16.dp))
                             SectionTitle("인기 만화")
                         }
                         items(homeContent.popular) { manga ->

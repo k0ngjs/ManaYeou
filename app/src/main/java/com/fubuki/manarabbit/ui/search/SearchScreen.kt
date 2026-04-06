@@ -17,29 +17,23 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.Manga
-import com.fubuki.manarabbit.data.SettingsDataStore
-import com.fubuki.manarabbit.network.searchManga
-import kotlinx.coroutines.launch
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
+    query: String = "",
+    results: List<Manga> = emptyList(),
+    isLoading: Boolean = false,
+    searched: Boolean = false,
+    onQueryChange: (String) -> Unit = {},
+    onSearch: (String) -> Unit = {},
     onMangaClick: (Manga) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val store = remember { SettingsDataStore(context) }
-    val scope = rememberCoroutineScope()
-
-    val baseUrl by store.baseUrl.collectAsState(initial = "")
-    val cfCookies by store.cfCookies.collectAsState(initial = "")
-
-    var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<Manga>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var searched by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // 검색창
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -48,20 +42,19 @@ fun SearchScreen(
         ) {
             OutlinedTextField(
                 value = query,
-                onValueChange = { query = it },
+                onValueChange = { onQueryChange(it) },
                 placeholder = { Text("만화 제목 검색") },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        if (query.isNotEmpty()) onSearch(query)
+                    }
+                ),
                 trailingIcon = {
                     IconButton(onClick = {
-                        if (query.isNotEmpty()) {
-                            isLoading = true
-                            searched = true
-                            scope.launch {
-                                results = searchManga(baseUrl, query, cfCookies)
-                                isLoading = false
-                            }
-                        }
+                        if (query.isNotEmpty()) onSearch(query)
                     }) {
                         Icon(Icons.Filled.Search, "검색")
                     }
@@ -69,7 +62,6 @@ fun SearchScreen(
             )
         }
 
-        // 결과
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))

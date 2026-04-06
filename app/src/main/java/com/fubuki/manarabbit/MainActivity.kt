@@ -23,17 +23,18 @@ import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.HomeContent
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchHomeContent
+import com.fubuki.manarabbit.network.searchManga
 import com.fubuki.manarabbit.ui.auth.CloudflareScreen
 import com.fubuki.manarabbit.ui.episode.EpisodeScreen
 import com.fubuki.manarabbit.ui.home.HomeScreen
 import com.fubuki.manarabbit.ui.list.BookmarkListScreen
 import com.fubuki.manarabbit.ui.list.RecentListScreen
 import com.fubuki.manarabbit.ui.my.MyScreen
+import com.fubuki.manarabbit.ui.search.SearchScreen
 import com.fubuki.manarabbit.ui.settings.SettingsScreen
 import com.fubuki.manarabbit.ui.theme.ManaRabbitTheme
 import com.fubuki.manarabbit.ui.update.UpdateListScreen
 import com.fubuki.manarabbit.ui.viewer.ViewerScreen
-import com.fubuki.manarabbit.ui.search.SearchScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -72,10 +73,24 @@ fun MainScreen() {
     val recentMangaStr by store.recentManga.collectAsState(initial = "")
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
 
+    var mangaFromRecent by remember { mutableStateOf(false) }
+    var mangaFromBookmark by remember { mutableStateOf(false) }
+
     // 홈 데이터 캐싱
     var homeContent by remember { mutableStateOf(HomeContent()) }
     var homeLoading by remember { mutableStateOf(true) }
     var homeStatus by remember { mutableStateOf("") }
+
+    // 검색 상태 캐싱
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<Manga>>(emptyList()) }
+    var searchLoading by remember { mutableStateOf(false) }
+    var searchSearched by remember { mutableStateOf(false) }
+    var cachedMangaId by remember { mutableIntStateOf(0) }
+    var cachedMangaDetail by remember { mutableStateOf(com.fubuki.manarabbit.data.MangaDetail()) }
+    var cachedBookmarkItems by remember { mutableStateOf<List<com.fubuki.manarabbit.data.BookmarkedManga>>(emptyList()) }
+
+    val scope = rememberCoroutineScope()
 
     suspend fun loadHomeContent() {
         homeLoading = true
@@ -96,7 +111,11 @@ fun MainScreen() {
     }
 
     BackHandler(enabled = selectedEpisode != null) { selectedEpisode = null }
-    BackHandler(enabled = selectedManga != null) { selectedManga = null }
+    BackHandler(enabled = selectedManga != null) {
+        selectedManga = null
+        mangaFromRecent = false
+        mangaFromBookmark = false
+    }
     BackHandler(enabled = updateListData != null) { updateListData = null }
     BackHandler(enabled = recentListData != null) { recentListData = null }
     BackHandler(enabled = bookmarkListData != null) { bookmarkListData = null }
@@ -148,8 +167,6 @@ fun MainScreen() {
         return
     }
 
-    val scope = rememberCoroutineScope()
-
     Scaffold(
         bottomBar = {
             NavigationBar {
@@ -161,6 +178,8 @@ fun MainScreen() {
                         updateListData = null
                         recentListData = null
                         bookmarkListData = null
+                        mangaFromRecent = false
+                        mangaFromBookmark = false
                     },
                     icon = { Icon(Icons.Filled.Home, "홈") },
                     label = { Text("홈") }
@@ -173,6 +192,8 @@ fun MainScreen() {
                         updateListData = null
                         recentListData = null
                         bookmarkListData = null
+                        mangaFromRecent = false
+                        mangaFromBookmark = false
                     },
                     icon = { Icon(Icons.Filled.Search, "검색") },
                     label = { Text("검색") }
@@ -185,6 +206,8 @@ fun MainScreen() {
                         updateListData = null
                         recentListData = null
                         bookmarkListData = null
+                        mangaFromRecent = false
+                        mangaFromBookmark = false
                     },
                     icon = { Icon(Icons.Filled.Person, "마이") },
                     label = { Text("마이") }
@@ -197,6 +220,8 @@ fun MainScreen() {
                         updateListData = null
                         recentListData = null
                         bookmarkListData = null
+                        mangaFromRecent = false
+                        mangaFromBookmark = false
                     },
                     icon = { Icon(Icons.Filled.Settings, "설정") },
                     label = { Text("설정") }
@@ -209,7 +234,16 @@ fun MainScreen() {
                 selectedManga != null -> EpisodeScreen(
                     mangaId = selectedManga!!.id,
                     mangaName = selectedManga!!.name,
-                    onBack = { selectedManga = null },
+                    cachedDetail = if (cachedMangaId == selectedManga!!.id) cachedMangaDetail else com.fubuki.manarabbit.data.MangaDetail(),
+                    onDetailLoaded = { detail ->
+                        cachedMangaId = selectedManga!!.id
+                        cachedMangaDetail = detail
+                    },
+                    onBack = {
+                        selectedManga = null
+                        mangaFromRecent = false
+                        mangaFromBookmark = false
+                    },
                     onEpisodeClick = { id, title, list ->
                         selectedEpisode = Triple(id, title, list)
                     },
@@ -227,15 +261,17 @@ fun MainScreen() {
                 recentListData != null -> RecentListScreen(
                     items = recentListData!!,
                     onMangaClick = { manga ->
-                        recentListData = null
+                        mangaFromRecent = true
                         selectedManga = Manga(manga.mangaId, manga.mangaName, manga.thumb, manga.referer)
                     },
                     onBack = { recentListData = null }
                 )
                 bookmarkListData != null -> BookmarkListScreen(
                     items = bookmarkListData!!,
+                    cachedItems = cachedBookmarkItems,
+                    onItemsLoaded = { cachedBookmarkItems = it },
                     onMangaClick = { manga ->
-                        bookmarkListData = null
+                        mangaFromBookmark = true
                         selectedManga = manga
                     },
                     onBack = { bookmarkListData = null }
@@ -249,9 +285,7 @@ fun MainScreen() {
                             homeContent = homeContent,
                             isLoading = homeLoading,
                             status = homeStatus,
-                            onRefresh = {
-                                scope.launch { loadHomeContent() }
-                            },
+                            onRefresh = { loadHomeContent() },
                             onMangaClick = { manga ->
                                 if (manga.isEpisode) {
                                     selectedEpisode = Triple(manga.id, manga.name, emptyList())
@@ -265,6 +299,19 @@ fun MainScreen() {
                             onAuthNeeded = { showAuthDialog = true }
                         )
                         1 -> SearchScreen(
+                            query = searchQuery,
+                            results = searchResults,
+                            isLoading = searchLoading,
+                            searched = searchSearched,
+                            onQueryChange = { searchQuery = it },
+                            onSearch = { query ->
+                                searchLoading = true
+                                searchSearched = true
+                                scope.launch {
+                                    searchResults = searchManga(baseUrl, query, cfCookies)
+                                    searchLoading = false
+                                }
+                            },
                             onMangaClick = { manga ->
                                 selectedManga = manga
                             }

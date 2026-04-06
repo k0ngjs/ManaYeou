@@ -20,13 +20,18 @@ import com.fubuki.manarabbit.data.BookmarkedManga
 import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchEpisodeList
+import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookmarkListScreen(
     items: List<Manga>,
+    cachedItems: List<BookmarkedManga> = emptyList(),
+    onItemsLoaded: (List<BookmarkedManga>) -> Unit = {},
     onMangaClick: (Manga) -> Unit,
     onBack: () -> Unit
 ) {
@@ -38,28 +43,41 @@ fun BookmarkListScreen(
 
     var bookmarkItems by remember { mutableStateOf<List<BookmarkedManga>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    suspend fun loadBookmarks(refresh: Boolean = false) {
+        if (refresh) isRefreshing = true else isLoading = true
+        val result = coroutineScope {
+            items.map { manga ->
+                async(Dispatchers.IO) {
+                    try {
+                        val episodes = fetchEpisodeList(baseUrl, manga.id, cfCookies)
+                        val latest = episodes.firstOrNull()
+                        BookmarkedManga(
+                            manga = manga,
+                            latestEpisodeId = latest?.id ?: 0,
+                            latestEpisodeTitle = latest?.title ?: "",
+                            latestEpisodeDate = latest?.date ?: ""
+                        )
+                    } catch (e: Exception) {
+                        BookmarkedManga(manga = manga)
+                    }
+                }
+            }.awaitAll()
+        }
+        bookmarkItems = result.sortedByDescending { it.latestEpisodeId }
+        onItemsLoaded(bookmarkItems)
+        if (refresh) isRefreshing = false else isLoading = false
+    }
 
     LaunchedEffect(items, cfCookies) {
+        if (cachedItems.isNotEmpty()) {
+            bookmarkItems = cachedItems
+            isLoading = false
+            return@LaunchedEffect
+        }
         if (cfCookies.isEmpty()) return@LaunchedEffect
-        isLoading = true
-        val result = items.map { manga ->
-            scope.async(Dispatchers.IO) {
-                try {
-                    val episodes = fetchEpisodeList(baseUrl, manga.id, cfCookies)
-                    val latest = episodes.firstOrNull()
-                    BookmarkedManga(
-                        manga = manga,
-                        latestEpisodeId = latest?.id ?: 0,
-                        latestEpisodeTitle = latest?.title ?: "",
-                        latestEpisodeDate = latest?.date ?: ""
-                    )
-                } catch (e: Exception) {
-                    BookmarkedManga(manga = manga)
-                }
-            }
-        }.map { it.await() }
-        bookmarkItems = result.sortedByDescending { it.latestEpisodeId }
-        isLoading = false
+        loadBookmarks()
     }
 
     Scaffold(
@@ -91,61 +109,63 @@ fun BookmarkListScreen(
             ) {
                 Text("북마크한 만화가 없어요", style = MaterialTheme.typography.bodyMedium)
             }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(vertical = 4.dp)
+            else -> PullToRefreshWrapper(
+                onRefresh = { loadBookmarks(refresh = true) },
+                modifier = Modifier.fillMaxSize().padding(padding)
             ) {
-                items(bookmarkItems) { item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onMangaClick(item.manga) }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(item.manga.thumb)
-                                    .addHeader("Referer", item.manga.referer)
-                                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = item.manga.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = item.manga.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (item.latestEpisodeTitle.isNotEmpty()) {
-                                Spacer(Modifier.height(4.dp))
+                LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
+                    items(bookmarkItems) { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onMangaClick(item.manga) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(item.manga.thumb)
+                                        .addHeader("Referer", item.manga.referer)
+                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = item.manga.name,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = item.latestEpisodeTitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    text = item.manga.name,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                if (item.latestEpisodeDate.isNotEmpty()) {
+                                if (item.latestEpisodeTitle.isNotEmpty()) {
+                                    Spacer(Modifier.height(4.dp))
                                     Text(
-                                        text = item.latestEpisodeDate,
+                                        text = item.latestEpisodeTitle,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = MaterialTheme.colorScheme.primary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    if (item.latestEpisodeDate.isNotEmpty()) {
+                                        Text(
+                                            text = item.latestEpisodeDate,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
+                        HorizontalDivider(thickness = 0.5.dp)
                     }
-                    HorizontalDivider(thickness = 0.5.dp)
                 }
             }
         }

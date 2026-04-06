@@ -27,7 +27,7 @@ suspend fun fetchHomeContent(baseUrl: String, cookieStr: String = ""): HomeConte
 
             val updateDoc = Jsoup.parse(updateBody)
             val updated = mutableListOf<Manga>()
-            for (e in updateDoc.select("div.media.post-list").take(20)) {
+            for (e in updateDoc.select("div.media.post-list").take(70)) {
                 val seriesId = e.selectFirst("a.btn-primary")?.attr("rel")?.toIntOrNull() ?: continue
                 val thumb = e.selectFirst("img")?.attr("src") ?: ""
                 val name = e.selectFirst("div.post-subject a")?.ownText()?.trim() ?: continue
