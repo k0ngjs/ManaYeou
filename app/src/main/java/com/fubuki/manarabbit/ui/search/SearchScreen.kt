@@ -1,9 +1,13 @@
 package com.fubuki.manarabbit.ui.search
 
+import com.fubuki.manarabbit.network.USER_AGENT
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -12,15 +16,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.Manga
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     query: String = "",
@@ -34,40 +37,34 @@ fun SearchScreen(
     val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
+        TopAppBar(title = { Text("검색", style = MaterialTheme.typography.titleLarge) })
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = { onQueryChange(it) },
+            placeholder = { Text("만화 제목 검색") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { onQueryChange(it) },
-                placeholder = { Text("만화 제목 검색") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(
-                    onSearch = {
-                        if (query.isNotEmpty()) onSearch(query)
-                    }
-                ),
-                trailingIcon = {
-                    IconButton(onClick = {
-                        if (query.isNotEmpty()) onSearch(query)
-                    }) {
-                        Icon(Icons.Filled.Search, "검색")
-                    }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = { if (query.isNotEmpty()) onSearch(query) }
+            ),
+            trailingIcon = {
+                IconButton(onClick = { if (query.isNotEmpty()) onSearch(query) }) {
+                    Icon(Icons.Filled.Search, "검색")
                 }
-            )
-        }
+            }
+        )
 
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 searched && results.isEmpty() -> Text(
                     "검색 결과가 없어요",
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier.align(Alignment.Center),
+                    style = MaterialTheme.typography.bodyMedium
                 )
                 else -> LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
                     items(results) { manga ->
@@ -75,7 +72,7 @@ fun SearchScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onMangaClick(manga) }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
@@ -83,7 +80,7 @@ fun SearchScreen(
                                     model = ImageRequest.Builder(context)
                                         .data(manga.thumb)
                                         .addHeader("Referer", manga.referer)
-                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                        .addHeader("User-Agent", USER_AGENT)
                                         .crossfade(true)
                                         .build(),
                                     contentDescription = manga.name,
@@ -91,7 +88,7 @@ fun SearchScreen(
                                     contentScale = ContentScale.Crop
                                 )
                             }
-                            Spacer(Modifier.width(12.dp))
+                            Spacer(Modifier.width(16.dp))
                             Text(
                                 text = manga.name,
                                 style = MaterialTheme.typography.bodyMedium,

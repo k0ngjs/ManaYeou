@@ -1,7 +1,17 @@
 package com.fubuki.manarabbit.ui.viewer
 
+import com.fubuki.manarabbit.network.USER_AGENT
+
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ContentValues
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +26,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -27,6 +38,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.Episode
@@ -35,7 +47,11 @@ import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchEpisodeListWithSeriesId
 import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.network.fetchViewerImages
+import com.fubuki.manarabbit.network.httpClient
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.Request
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -76,6 +92,47 @@ fun ViewerScreen(
     var currentImageIndex by remember { mutableIntStateOf(0) }
     var loadedEpisodeList by remember { mutableStateOf(episodeList) }
     var seriesMangaId by remember { mutableIntStateOf(0) }
+
+    // 이미지 저장 권한 요청 (Android 9 이하)
+    val writePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val url = images.getOrNull(currentImageIndex)
+            if (url != null) {
+                scope.launch {
+                    val ok = saveImageToGallery(context, url, baseUrl)
+                    Toast.makeText(
+                        context,
+                        if (ok) "이미지 저장 완료" else "저장 실패",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        } else {
+            Toast.makeText(context, "저장 권한이 필요합니다", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun downloadCurrentImage() {
+        val url = images.getOrNull(currentImageIndex) ?: return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+        scope.launch {
+            val ok = saveImageToGallery(context, url, baseUrl)
+            Toast.makeText(
+                context,
+                if (ok) "이미지 저장 완료" else "저장 실패",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     val currentIndex = loadedEpisodeList.indexOfFirst { it.id == currentId }
     val hasPrev = currentIndex < loadedEpisodeList.size - 1
@@ -143,7 +200,6 @@ fun ViewerScreen(
                 if (pair.first.isNotEmpty()) {
                     loadedEpisodeList = pair.first
                 }
-                // 항상 최근 본 만화 저장
                 val mangaId = if (pair.second > 0) pair.second else seriesMangaId
                 if (mangaId > 0) {
                     val detail = fetchMangaDetail(baseUrl, mangaId, cfCookies)
@@ -190,7 +246,7 @@ fun ViewerScreen(
                                     model = ImageRequest.Builder(context)
                                         .data(imageUrl)
                                         .addHeader("Referer", baseUrl)
-                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                        .addHeader("User-Agent", USER_AGENT)
                                         .build(),
                                     contentDescription = null,
                                     modifier = Modifier.fillMaxWidth(),
@@ -211,7 +267,7 @@ fun ViewerScreen(
                                     model = ImageRequest.Builder(context)
                                         .data(page[0])
                                         .addHeader("Referer", baseUrl)
-                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                        .addHeader("User-Agent", USER_AGENT)
                                         .build(),
                                     contentDescription = null,
                                     modifier = Modifier.fillMaxSize(),
@@ -233,7 +289,7 @@ fun ViewerScreen(
                                                     model = ImageRequest.Builder(context)
                                                         .data(url)
                                                         .addHeader("Referer", baseUrl)
-                                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                                        .addHeader("User-Agent", USER_AGENT)
                                                         .build(),
                                                     contentDescription = null,
                                                     modifier = Modifier.fillMaxHeight(),
@@ -252,7 +308,7 @@ fun ViewerScreen(
                                                     model = ImageRequest.Builder(context)
                                                         .data(url)
                                                         .addHeader("Referer", baseUrl)
-                                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                                        .addHeader("User-Agent", USER_AGENT)
                                                         .build(),
                                                     contentDescription = null,
                                                     modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -276,7 +332,15 @@ fun ViewerScreen(
                     IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "뒤로") }
                 },
                 actions = {
-                    IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.Settings, "설정") }
+                    IconButton(
+                        onClick = { downloadCurrentImage() },
+                        enabled = images.isNotEmpty()
+                    ) {
+                        Icon(Icons.Filled.Download, "저장", tint = Color.White)
+                    }
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(Icons.Filled.Settings, "설정", tint = Color.White)
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Black.copy(alpha = 0.7f),
@@ -335,6 +399,37 @@ fun ViewerScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+private suspend fun saveImageToGallery(context: android.content.Context, imageUrl: String, referer: String): Boolean {
+    return withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url(imageUrl)
+                .addHeader("Referer", referer)
+                .addHeader("User-Agent", USER_AGENT)
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val bytes = response.body?.bytes() ?: return@withContext false
+            response.close()
+
+            val filename = "manarabbit_${System.currentTimeMillis()}.jpg"
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ManaRabbit")
+                }
+            }
+            val uri = context.contentResolver.insert(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues
+            ) ?: return@withContext false
+            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 }

@@ -5,7 +5,6 @@ import com.fubuki.manarabbit.data.MangaDetail
 import com.fubuki.manarabbit.data.MangaInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 
@@ -17,16 +16,14 @@ suspend fun fetchMangaDetail(
     return withContext(Dispatchers.IO) {
         try {
             val cleanUrl = baseUrl.trimEnd('/')
-            val client = OkHttpClient()
             val request = Request.Builder()
                 .url("$cleanUrl/comic/$mangaId")
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                .header("User-Agent", USER_AGENT)
                 .header("Referer", cleanUrl)
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
-            val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext MangaDetail()
-            response.close()
+            val body = httpClient.newCall(request).execute().use { it.body?.string() }
+                ?: return@withContext MangaDetail()
 
             val doc = Jsoup.parse(body)
             val header = doc.selectFirst("div.view-title")

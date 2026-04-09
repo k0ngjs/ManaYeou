@@ -18,7 +18,7 @@ object BackupManager {
     }
 
     suspend fun exportBackup(store: SettingsDataStore): String {
-        val recentList = store.parseMangaList(store.recentManga.first())
+        val recentList = store.parseRecentMangaList(store.recentManga.first())
         val bookmarkList = store.parseBookmarkList(store.bookmarkManga.first())
 
         val recentArray = JSONArray()
@@ -48,7 +48,6 @@ object BackupManager {
             val json = JSONObject(content)
             val cleanUrl = baseUrl.trimEnd('/')
 
-            // 북마크 복원
             val bookmarkArray = json.optJSONArray("b") ?: JSONArray()
             val bookmarkList = mutableListOf<Manga>()
             for (i in 0 until bookmarkArray.length()) {
@@ -68,7 +67,6 @@ object BackupManager {
             val mergedBookmark = (bookmarkList + existingBookmark).distinctBy { it.id }
             store.saveBookmarkList(mergedBookmark)
 
-            // 최근 본 만화 복원
             val recentArray = json.optJSONArray("r") ?: JSONArray()
             val recentList = mutableListOf<RecentManga>()
             for (i in 0 until recentArray.length()) {
@@ -92,7 +90,7 @@ object BackupManager {
                     recentList.add(RecentManga(mangaId, "", "", cleanUrl, lastEpisodeId, ""))
                 }
             }
-            val existingRecent = store.parseMangaList(store.recentManga.first())
+            val existingRecent = store.parseRecentMangaList(store.recentManga.first())
             val mergedRecent = (recentList + existingRecent).distinctBy { it.mangaId }.take(20)
             store.saveRecentMangaList(mergedRecent)
 
