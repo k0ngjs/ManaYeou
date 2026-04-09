@@ -23,6 +23,7 @@ import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.HomeContent
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchHomeContent
+import com.fubuki.manarabbit.network.resolveAutoUrl
 import com.fubuki.manarabbit.network.searchManga
 import com.fubuki.manarabbit.ui.auth.CloudflareScreen
 import com.fubuki.manarabbit.ui.episode.EpisodeScreen
@@ -33,7 +34,7 @@ import com.fubuki.manarabbit.ui.my.MyScreen
 import com.fubuki.manarabbit.ui.search.SearchScreen
 import com.fubuki.manarabbit.ui.settings.SettingsScreen
 import com.fubuki.manarabbit.ui.theme.ManaRabbitTheme
-import com.fubuki.manarabbit.ui.update.UpdateListScreen
+import com.fubuki.manarabbit.ui.list.UpdateListScreen
 import com.fubuki.manarabbit.ui.viewer.ViewerScreen
 import kotlinx.coroutines.launch
 
@@ -72,16 +73,13 @@ fun MainScreen() {
     var bookmarkListData by remember { mutableStateOf<List<Manga>?>(null) }
     val recentMangaStr by store.recentManga.collectAsState(initial = "")
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
+    val autoResolve by store.autoResolve.collectAsState(initial = false)
+    val autoResolveNumber by store.autoResolveNumber.collectAsState(initial = 0)
 
-    var mangaFromRecent by remember { mutableStateOf(false) }
-    var mangaFromBookmark by remember { mutableStateOf(false) }
-
-    // 홈 데이터 캐싱
     var homeContent by remember { mutableStateOf(HomeContent()) }
     var homeLoading by remember { mutableStateOf(true) }
     var homeStatus by remember { mutableStateOf("") }
 
-    // 검색 상태 캐싱
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<Manga>>(emptyList()) }
     var searchLoading by remember { mutableStateOf(false) }
@@ -91,6 +89,14 @@ fun MainScreen() {
     var cachedBookmarkItems by remember { mutableStateOf<List<com.fubuki.manarabbit.data.BookmarkedManga>>(emptyList()) }
 
     val scope = rememberCoroutineScope()
+
+    val selectTab: (Int) -> Unit = { tab ->
+        selectedTab = tab
+        selectedManga = null
+        updateListData = null
+        recentListData = null
+        bookmarkListData = null
+    }
 
     suspend fun loadHomeContent() {
         homeLoading = true
@@ -105,17 +111,22 @@ fun MainScreen() {
         homeLoading = false
     }
 
-    LaunchedEffect(baseUrl) {
+    // 자동 주소 탐색: baseUrl 혹은 autoResolve 설정이 바뀔 때 실행
+    LaunchedEffect(baseUrl, autoResolve) {
         if (baseUrl.isEmpty()) return@LaunchedEffect
+        if (autoResolve) {
+            val resolved = resolveAutoUrl(baseUrl, autoResolveNumber)
+            if (resolved != null && resolved.first != baseUrl) {
+                store.saveBaseUrl(resolved.first)
+                store.saveAutoResolveNumber(resolved.second)
+                return@LaunchedEffect // baseUrl 변경으로 이 effect가 다시 실행됨
+            }
+        }
         loadHomeContent()
     }
 
     BackHandler(enabled = selectedEpisode != null) { selectedEpisode = null }
-    BackHandler(enabled = selectedManga != null) {
-        selectedManga = null
-        mangaFromRecent = false
-        mangaFromBookmark = false
-    }
+    BackHandler(enabled = selectedManga != null) { selectedManga = null }
     BackHandler(enabled = updateListData != null) { updateListData = null }
     BackHandler(enabled = recentListData != null) { recentListData = null }
     BackHandler(enabled = bookmarkListData != null) { bookmarkListData = null }
@@ -143,9 +154,7 @@ fun MainScreen() {
             url = baseUrl,
             onCookieReceived = { cookies ->
                 showCloudflareScreen = false
-                kotlinx.coroutines.GlobalScope.launch {
-                    store.saveCfCookies(cookies)
-                }
+                scope.launch { store.saveCfCookies(cookies) }
             },
             onBack = { showCloudflareScreen = false }
         )
@@ -172,57 +181,25 @@ fun MainScreen() {
             NavigationBar {
                 NavigationBarItem(
                     selected = selectedTab == 0,
-                    onClick = {
-                        selectedTab = 0
-                        selectedManga = null
-                        updateListData = null
-                        recentListData = null
-                        bookmarkListData = null
-                        mangaFromRecent = false
-                        mangaFromBookmark = false
-                    },
+                    onClick = { selectTab(0) },
                     icon = { Icon(Icons.Filled.Home, "홈") },
                     label = { Text("홈") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
-                    onClick = {
-                        selectedTab = 1
-                        selectedManga = null
-                        updateListData = null
-                        recentListData = null
-                        bookmarkListData = null
-                        mangaFromRecent = false
-                        mangaFromBookmark = false
-                    },
+                    onClick = { selectTab(1) },
                     icon = { Icon(Icons.Filled.Search, "검색") },
                     label = { Text("검색") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
-                    onClick = {
-                        selectedTab = 2
-                        selectedManga = null
-                        updateListData = null
-                        recentListData = null
-                        bookmarkListData = null
-                        mangaFromRecent = false
-                        mangaFromBookmark = false
-                    },
+                    onClick = { selectTab(2) },
                     icon = { Icon(Icons.Filled.Person, "마이") },
                     label = { Text("마이") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
-                    onClick = {
-                        selectedTab = 3
-                        selectedManga = null
-                        updateListData = null
-                        recentListData = null
-                        bookmarkListData = null
-                        mangaFromRecent = false
-                        mangaFromBookmark = false
-                    },
+                    onClick = { selectTab(3) },
                     icon = { Icon(Icons.Filled.Settings, "설정") },
                     label = { Text("설정") }
                 )
@@ -239,11 +216,7 @@ fun MainScreen() {
                         cachedMangaId = selectedManga!!.id
                         cachedMangaDetail = detail
                     },
-                    onBack = {
-                        selectedManga = null
-                        mangaFromRecent = false
-                        mangaFromBookmark = false
-                    },
+                    onBack = { selectedManga = null },
                     onEpisodeClick = { id, title, list ->
                         selectedEpisode = Triple(id, title, list)
                     },
@@ -261,7 +234,6 @@ fun MainScreen() {
                 recentListData != null -> RecentListScreen(
                     items = recentListData!!,
                     onMangaClick = { manga ->
-                        mangaFromRecent = true
                         selectedManga = Manga(manga.mangaId, manga.mangaName, manga.thumb, manga.referer)
                     },
                     onBack = { recentListData = null }
@@ -270,10 +242,7 @@ fun MainScreen() {
                     items = bookmarkListData!!,
                     cachedItems = cachedBookmarkItems,
                     onItemsLoaded = { cachedBookmarkItems = it },
-                    onMangaClick = { manga ->
-                        mangaFromBookmark = true
-                        selectedManga = manga
-                    },
+                    onMangaClick = { manga -> selectedManga = manga },
                     onBack = { bookmarkListData = null }
                 )
                 else -> Box(
@@ -294,7 +263,7 @@ fun MainScreen() {
                                 }
                             },
                             onMoreUpdated = { updateListData = Pair("최신 만화", it) },
-                            onMoreRecent = { recentListData = store.parseMangaList(recentMangaStr) },
+                            onMoreRecent = { recentListData = store.parseRecentMangaList(recentMangaStr) },
                             onMoreBookmark = { bookmarkListData = store.parseBookmarkList(bookmarkStr) },
                             onAuthNeeded = { showAuthDialog = true }
                         )
@@ -312,12 +281,10 @@ fun MainScreen() {
                                     searchLoading = false
                                 }
                             },
-                            onMangaClick = { manga ->
-                                selectedManga = manga
-                            }
+                            onMangaClick = { manga -> selectedManga = manga }
                         )
                         2 -> MyScreen(
-                            onRecentClick = { recentListData = store.parseMangaList(recentMangaStr) },
+                            onRecentClick = { recentListData = store.parseRecentMangaList(recentMangaStr) },
                             onBookmarkClick = { bookmarkListData = store.parseBookmarkList(bookmarkStr) }
                         )
                         3 -> SettingsScreen(onCfAuthClick = { showCloudflareScreen = true })

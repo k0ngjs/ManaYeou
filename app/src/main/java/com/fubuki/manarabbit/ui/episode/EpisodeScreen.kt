@@ -1,5 +1,7 @@
 package com.fubuki.manarabbit.ui.episode
 
+import com.fubuki.manarabbit.network.USER_AGENT
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,7 +49,7 @@ fun EpisodeScreen(
     val baseUrl by store.baseUrl.collectAsState(initial = "")
     val cfCookies by store.cfCookies.collectAsState(initial = "")
     val recentMangaStr by store.recentManga.collectAsState(initial = "")
-    val recentMangaList = remember(recentMangaStr) { store.parseMangaList(recentMangaStr) }
+    val recentMangaList = remember(recentMangaStr) { store.parseRecentMangaList(recentMangaStr) }
     val lastEpisodeId = recentMangaList.find { it.mangaId == mangaId }?.lastEpisodeId
     var mangaDetail by remember { mutableStateOf(cachedDetail) }
     var isLoading by remember { mutableStateOf(cachedDetail.episodes.isEmpty()) }
@@ -66,7 +68,7 @@ fun EpisodeScreen(
         } else {
             mangaDetail = result
             onDetailLoaded(result)
-            val existing = store.parseMangaList(store.recentManga.first())
+            val existing = store.parseRecentMangaList(store.recentManga.first())
                 .find { it.mangaId == mangaId }
             if (existing != null) {
                 store.saveRecentManga(
@@ -215,7 +217,7 @@ fun MangaInfoHeader(
                 model = ImageRequest.Builder(context)
                     .data(info.thumb)
                     .addHeader("Referer", baseUrl)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                    .addHeader("User-Agent", USER_AGENT)
                     .crossfade(true)
                     .build(),
                 contentDescription = info.name,

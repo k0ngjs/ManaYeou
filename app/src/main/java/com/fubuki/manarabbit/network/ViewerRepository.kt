@@ -3,7 +3,6 @@ package com.fubuki.manarabbit.network
 import com.fubuki.manarabbit.data.Episode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 import java.net.URLDecoder
@@ -12,16 +11,14 @@ suspend fun fetchViewerImages(baseUrl: String, episodeId: Int, cookieStr: String
     return withContext(Dispatchers.IO) {
         try {
             val cleanUrl = baseUrl.trimEnd('/')
-            val client = OkHttpClient()
             val request = Request.Builder()
                 .url("$cleanUrl/comic/$episodeId")
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                .header("User-Agent", USER_AGENT)
                 .header("Referer", cleanUrl)
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
-            val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext emptyList()
-            response.close()
+            val body = httpClient.newCall(request).execute().use { it.body?.string() }
+                ?: return@withContext emptyList()
 
             val doc = Jsoup.parse(body)
             val result = mutableListOf<String>()
@@ -81,16 +78,14 @@ suspend fun fetchEpisodeListWithSeriesId(baseUrl: String, episodeId: Int, cookie
     return withContext(Dispatchers.IO) {
         try {
             val cleanUrl = baseUrl.trimEnd('/')
-            val client = OkHttpClient()
             val request = Request.Builder()
                 .url("$cleanUrl/comic/$episodeId")
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                .header("User-Agent", USER_AGENT)
                 .header("Referer", cleanUrl)
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
-            val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext Pair(emptyList(), 0)
-            response.close()
+            val body = httpClient.newCall(request).execute().use { it.body?.string() }
+                ?: return@withContext Pair(emptyList(), 0)
 
             val doc = Jsoup.parse(body)
             val navbar = doc.selectFirst("div.toon-nav") ?: return@withContext Pair(emptyList(), 0)

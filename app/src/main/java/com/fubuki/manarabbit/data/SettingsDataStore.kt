@@ -23,6 +23,8 @@ class SettingsDataStore(private val context: Context) {
         val VIEWER_DIRECTION_KEY = stringPreferencesKey("viewer_direction")
         val RECENT_MANGA_KEY = stringPreferencesKey("recent_manga")
         val BOOKMARK_MANGA_KEY = stringPreferencesKey("bookmark_manga")
+        val AUTO_RESOLVE_KEY = stringPreferencesKey("auto_resolve")
+        val AUTO_RESOLVE_NUMBER_KEY = stringPreferencesKey("auto_resolve_number")
     }
 
     val baseUrl: Flow<String> = context.dataStore.data.map { prefs ->
@@ -61,6 +63,22 @@ class SettingsDataStore(private val context: Context) {
         prefs[BOOKMARK_MANGA_KEY] ?: ""
     }
 
+    val autoResolve: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[AUTO_RESOLVE_KEY]?.toBoolean() ?: false
+    }
+
+    val autoResolveNumber: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[AUTO_RESOLVE_NUMBER_KEY]?.toIntOrNull() ?: 0
+    }
+
+    suspend fun saveAutoResolve(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[AUTO_RESOLVE_KEY] = enabled.toString() }
+    }
+
+    suspend fun saveAutoResolveNumber(number: Int) {
+        context.dataStore.edit { prefs -> prefs[AUTO_RESOLVE_NUMBER_KEY] = number.toString() }
+    }
+
     suspend fun saveBaseUrl(url: String) {
         context.dataStore.edit { prefs -> prefs[BASE_URL_KEY] = url }
     }
@@ -92,7 +110,7 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun saveRecentManga(item: RecentManga) {
         context.dataStore.edit { prefs ->
-            val current = parseMangaList(prefs[RECENT_MANGA_KEY] ?: "")
+            val current = parseRecentMangaList(prefs[RECENT_MANGA_KEY] ?: "")
             val updated = (listOf(item) + current.filter { it.mangaId != item.mangaId }).take(20)
             prefs[RECENT_MANGA_KEY] = serializeRecentMangaList(updated)
         }
@@ -147,7 +165,7 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
-    fun parseMangaList(str: String): List<RecentManga> {
+    fun parseRecentMangaList(str: String): List<RecentManga> {
         if (str.isEmpty()) return emptyList()
         return str.split("|").mapNotNull { item ->
             val parts = item.split("::")

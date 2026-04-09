@@ -1,5 +1,7 @@
 package com.fubuki.manarabbit.ui.list
 
+import com.fubuki.manarabbit.network.USER_AGENT
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -127,7 +129,7 @@ fun BookmarkListScreen(
                                     model = ImageRequest.Builder(context)
                                         .data(item.manga.thumb)
                                         .addHeader("Referer", item.manga.referer)
-                                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
+                                        .addHeader("User-Agent", USER_AGENT)
                                         .crossfade(true)
                                         .build(),
                                     contentDescription = item.manga.name,

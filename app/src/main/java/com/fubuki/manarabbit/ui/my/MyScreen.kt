@@ -10,51 +10,53 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyScreen(
     onRecentClick: () -> Unit = {},
     onBookmarkClick: () -> Unit = {}
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text("마이", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(8.dp))
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(title = { Text("마이", style = MaterialTheme.typography.titleLarge) })
 
-        Card(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onRecentClick() }
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .clickable { onRecentClick() }
             ) {
-                Text("최근 본 만화", style = MaterialTheme.typography.bodyLarge)
-                Icon(Icons.Filled.ArrowForward, "이동")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("최근 본 만화", style = MaterialTheme.typography.bodyLarge)
+                    Icon(Icons.Filled.ArrowForward, "이동")
+                }
             }
-        }
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onBookmarkClick() }
-        ) {
-            Row(
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .clickable { onBookmarkClick() }
             ) {
-                Text("북마크", style = MaterialTheme.typography.bodyLarge)
-                Icon(Icons.Filled.ArrowForward, "이동")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("북마크", style = MaterialTheme.typography.bodyLarge)
+                    Icon(Icons.Filled.ArrowForward, "이동")
+                }
             }
         }
     }
