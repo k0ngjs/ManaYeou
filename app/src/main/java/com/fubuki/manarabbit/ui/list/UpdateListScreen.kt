@@ -31,6 +31,7 @@ fun UpdateListScreen(
     val context = LocalContext.current
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = { Text(title) },
@@ -38,7 +39,8 @@ fun UpdateListScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, "뒤로")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { padding ->
@@ -51,7 +53,7 @@ fun UpdateListScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onMangaClick(manga) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
@@ -67,7 +69,7 @@ fun UpdateListScreen(
                             contentScale = ContentScale.Crop
                         )
                     }
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(16.dp))
                     Text(
                         text = manga.name,
                         style = MaterialTheme.typography.bodyMedium,

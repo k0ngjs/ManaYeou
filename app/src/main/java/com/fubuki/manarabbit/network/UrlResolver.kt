@@ -9,12 +9,34 @@ import okhttp3.Request
 import java.net.URL
 
 /**
- * 기본 URL에서 현재 접속 가능한 번호를 탐색해 반환합니다.
+ * 텔레그램 채널(https://t.me/s/newtoki9)에서 최신 manatoki 주소를 가져옵니다.
+ * 성공 시 "https://manatokiXXX.net/" 형태의 URL을 반환, 실패 시 null.
+ */
+suspend fun fetchUrlFromTelegram(): String? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("https://t.me/s/newtoki9")
+                .header("User-Agent", USER_AGENT)
+                .build()
+            val resp = resolveClient.newCall(req).execute()
+            val body = resp.body?.string() ?: return@withContext null
+            resp.close()
+            // 가장 마지막에 등장하는 manatoki URL을 최신으로 간주
+            val matches = Regex("""https://manatoki(\d+)\.net""").findAll(body).toList()
+            matches.lastOrNull()?.value?.let { "$it/" }
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+
+/**
+ * 기본 URL에서 현재 접속 가능한 번호를 탐색해 반환합니다. (텔레그램 실패 시 폴백용)
  *
  * 탐색 순서:
  *  ① 저장된 번호 / URL 내 번호에서 ±50 범위 먼저 시도
- *  ② 기본 도메인(숫자 없음)이 번호 있는 URL로 리다이렉트하면 그 번호 사용
- *  ③ 전체 범위 100~1000 병렬 배치 스캔
+ *  ② 전체 범위 460~1000 병렬 배치 스캔, 이후 100~459
  */
 suspend fun resolveAutoUrl(baseUrl: String, lastNumber: Int): Pair<String, Int>? {
     return withContext(Dispatchers.IO) {
@@ -63,27 +85,13 @@ suspend fun resolveAutoUrl(baseUrl: String, lastNumber: Int): Pair<String, Int>?
                 }
             }
 
-            // ② 기본 도메인(숫자 없음) 자체가 리다이렉트로 번호를 알려주는지 확인
-            try {
-                val baseReq = Request.Builder()
-                    .url("$scheme://$prefix$domainSuffix/")
-                    .header("User-Agent", USER_AGENT)
-                    .build()
-                val resp = resolveClient.newCall(baseReq).execute()
-                val finalHost = resp.request.url.host  // 리다이렉트 후 최종 URL
-                resp.close()
-                val redirectMatch = Regex("""^([a-zA-Z0-9\-]+?)(\d+)(\.[a-zA-Z.]+)$""")
-                    .find(finalHost)
-                val redirectN = redirectMatch?.groupValues?.get(2)?.toIntOrNull()
-                if (redirectN != null) {
-                    return@withContext Pair("$scheme://$prefix$redirectN$domainSuffix", redirectN)
-                }
-            } catch (_: Exception) { }
-
-            // ③ 전체 범위 병렬 배치 스캔 (100~1000)
-            for (batchStart in 100..1000 step 30) {
+            // ② 전체 범위 병렬 배치 스캔 (460부터 시작, 이후 100~459 탐색)
+            val scanRanges = (460..1000 step 30).toList() + (100..459 step 30).toList()
+            for (batchStart in scanRanges) {
+                val batchEnd = if (batchStart >= 460) minOf(batchStart + 30, 1001)
+                               else minOf(batchStart + 30, 460)
                 val found = coroutineScope {
-                    (batchStart until minOf(batchStart + 30, 1001)).map { n ->
+                    (batchStart until batchEnd).map { n ->
                         async { if (tryNumber(n)) n else null }
                     }.awaitAll().firstOrNull { it != null }
                 }

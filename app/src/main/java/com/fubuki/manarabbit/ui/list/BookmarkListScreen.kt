@@ -83,6 +83,7 @@ fun BookmarkListScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = { Text("북마크") },
@@ -90,7 +91,8 @@ fun BookmarkListScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, "뒤로")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { padding ->
@@ -121,7 +123,7 @@ fun BookmarkListScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onMangaClick(item.manga) }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
@@ -137,7 +139,7 @@ fun BookmarkListScreen(
                                     contentScale = ContentScale.Crop
                                 )
                             }
-                            Spacer(Modifier.width(12.dp))
+                            Spacer(Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = item.manga.name,

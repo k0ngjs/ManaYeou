@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,17 +28,52 @@ import com.fubuki.manarabbit.data.RecentManga
 fun RecentListScreen(
     items: List<RecentManga>,
     onMangaClick: (RecentManga) -> Unit,
+    onDeleteItems: (List<RecentManga>) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    var editMode by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<Int>()) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("최근 본 만화") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (editMode) {
+                            editMode = false
+                            selected = emptySet()
+                        } else {
+                            onBack()
+                        }
+                    }) {
                         Icon(Icons.Filled.ArrowBack, "뒤로")
+                    }
+                },
+                actions = {
+                    if (editMode) {
+                        IconButton(
+                            onClick = {
+                                val toDelete = items.filter { it.mangaId in selected }
+                                onDeleteItems(toDelete)
+                                selected = emptySet()
+                                editMode = false
+                            },
+                            enabled = selected.isNotEmpty()
+                        ) {
+                            Icon(Icons.Filled.Delete, "삭제",
+                                tint = if (selected.isNotEmpty())
+                                    MaterialTheme.colorScheme.error
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        TextButton(onClick = { editMode = true }) {
+                            Text("편집")
+                        }
                     }
                 }
             )
@@ -45,14 +83,34 @@ fun RecentListScreen(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(vertical = 4.dp)
         ) {
-            items(items) { manga ->
+            items(items, key = { it.mangaId }) { manga ->
+                val isSelected = manga.mangaId in selected
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onMangaClick(manga) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .clickable {
+                            if (editMode) {
+                                selected = if (isSelected)
+                                    selected - manga.mangaId
+                                else
+                                    selected + manga.mangaId
+                            } else {
+                                onMangaClick(manga)
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (editMode) {
+                        Icon(
+                            imageVector = if (isSelected) Icons.Outlined.CheckBox
+                                          else Icons.Outlined.CheckBoxOutlineBlank,
+                            contentDescription = null,
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
                     Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
@@ -66,7 +124,7 @@ fun RecentListScreen(
                             contentScale = ContentScale.Crop
                         )
                     }
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = manga.mangaName,

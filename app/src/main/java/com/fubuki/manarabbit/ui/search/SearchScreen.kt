@@ -37,26 +37,33 @@ fun SearchScreen(
     val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("검색", style = MaterialTheme.typography.titleLarge) })
-
-        OutlinedTextField(
-            value = query,
-            onValueChange = { onQueryChange(it) },
-            placeholder = { Text("만화 제목 검색") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(
-                onSearch = { if (query.isNotEmpty()) onSearch(query) }
-            ),
-            trailingIcon = {
-                IconButton(onClick = { if (query.isNotEmpty()) onSearch(query) }) {
-                    Icon(Icons.Filled.Search, "검색")
-                }
-            }
+        TopAppBar(
+            title = { Text("검색", style = MaterialTheme.typography.titleLarge) },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
         )
+
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = { onQueryChange(it) },
+                placeholder = { Text("만화 제목 검색") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { if (query.isNotEmpty()) onSearch(query) }
+                ),
+                trailingIcon = {
+                    IconButton(onClick = { if (query.isNotEmpty()) onSearch(query) }) {
+                        Icon(Icons.Filled.Search, "검색")
+                    }
+                }
+            )
+
+            Spacer(Modifier.height(8.dp))
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
             when {
@@ -72,7 +79,7 @@ fun SearchScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onMangaClick(manga) }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {

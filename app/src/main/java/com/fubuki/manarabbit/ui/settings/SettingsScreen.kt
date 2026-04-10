@@ -6,6 +6,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Help
@@ -13,7 +16,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.fubuki.manarabbit.data.BackupManager
 import com.fubuki.manarabbit.data.SettingsDataStore
@@ -25,16 +31,14 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
     val savedUrl by store.baseUrl.collectAsState(initial = "")
     val theme by store.theme.collectAsState(initial = "system")
     val autoResolve by store.autoResolve.collectAsState(initial = false)
     var showImportSuccess by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
-
-    // 자동 모드일 땐 저장된 URL에서 숫자를 제거해 보여줌 (예: manatoki470.net → manatoki.net)
-    val displayUrl = if (autoResolve) stripNumberFromUrl(savedUrl) else savedUrl
-    var urlInput by remember(displayUrl) { mutableStateOf(displayUrl) }
+    var urlInput by remember(savedUrl) { mutableStateOf(savedUrl) }
 
     val cfCookies by store.cfCookies.collectAsState(initial = "")
 
@@ -87,7 +91,8 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                 IconButton(onClick = { showHelp = true }) {
                     Icon(Icons.Outlined.Help, contentDescription = "도움말")
                 }
-            }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
         )
 
         if (showHelp) {
@@ -96,18 +101,17 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                 title = { Text("서버 주소 도움말") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("자동 탐색 (토글 ON)", style = MaterialTheme.typography.labelLarge,
+                        Text("자동 탐색 ON", style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary)
                         Text(
-                            "숫자를 제외한 기본 주소를 입력합니다.\n예: https://manatoki.net/\n\n" +
-                            "앱 시작 시 접속 가능한 번호를 자동으로 탐색합니다. 번호가 변경되어도 자동으로 대응합니다.",
+                            "텔레그램 공지에서 최신 주소를 자동으로 가져옵니다.",
                             style = MaterialTheme.typography.bodySmall
                         )
                         HorizontalDivider()
-                        Text("수동 (토글 OFF)", style = MaterialTheme.typography.labelLarge,
+                        Text("자동 탐색 OFF", style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary)
                         Text(
-                            "전체 주소를 직접 입력합니다.\n예: https://manatoki469.net/",
+                            "주소를 직접 입력합니다.\n예: https://manatoki469.net/",
                             style = MaterialTheme.typography.bodySmall
                         )
                         HorizontalDivider()
@@ -128,7 +132,7 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 서버 주소
@@ -144,26 +148,64 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                 Text("자동 탐색", style = MaterialTheme.typography.bodyLarge)
                 Switch(
                     checked = autoResolve,
-                    onCheckedChange = { scope.launch { store.saveAutoResolve(it) } }
+                    onCheckedChange = { scope.launch { store.saveAutoResolve(it) } },
+                    colors = SwitchDefaults.colors(
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 )
             }
 
-            OutlinedTextField(
-                value = urlInput,
-                onValueChange = { urlInput = it },
-                label = { Text(if (autoResolve) "기본 주소 (숫자 제외)" else "서버 주소") },
-                placeholder = {
-                    Text(if (autoResolve) "https://manatoki.net/" else "https://manatoki469.net/")
-                },
+            // 자동/수동 공통 카드 UI
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-            Button(
-                onClick = { scope.launch { store.saveBaseUrl(urlInput.trimEnd('/') + "/") } },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = urlInput.isNotBlank()
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 0.dp
             ) {
-                Text("저장")
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    if (autoResolve) {
+                        // 읽기 전용
+                        Text(
+                            text = if (savedUrl.isNotEmpty()) savedUrl else "앱 시작 시 자동으로 가져옵니다",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (savedUrl.isNotEmpty())
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        // 직접 입력 (키보드 완료로 저장)
+                        BasicTextField(
+                            value = urlInput,
+                            onValueChange = { urlInput = it },
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                scope.launch { store.saveBaseUrl(urlInput.trimEnd('/') + "/") }
+                                focusManager.clearFocus()
+                            }),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            decorationBox = { innerTextField ->
+                                Box {
+                                    if (urlInput.isEmpty()) {
+                                        Text(
+                                            "https://manatoki469.net/",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
 
             // CAPTCHA
@@ -196,7 +238,11 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                     FilterChip(
                         selected = theme == value,
                         onClick = { scope.launch { store.saveTheme(value) } },
-                        label = { Text(label) }
+                        label = { Text(label) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = androidx.compose.ui.graphics.Color.Black
+                        )
                     )
                 }
             }
@@ -226,18 +272,5 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
 
             Spacer(Modifier.height(8.dp))
         }
-    }
-}
-
-/** 저장된 URL에서 숫자 부분을 제거해 기본 주소만 반환. (예: https://manatoki470.net/ → https://manatoki.net/) */
-private fun stripNumberFromUrl(url: String): String {
-    return try {
-        val trimmed = url.trimEnd('/')
-        val parsed = java.net.URL(trimmed)
-        val host = parsed.host
-        val stripped = host.replace(Regex("""^([a-zA-Z0-9\-]+?)\d+(\.[a-zA-Z.]+)$"""), "$1$2")
-        if (stripped != host) "${parsed.protocol}://$stripped/" else "$trimmed/"
-    } catch (_: Exception) {
-        url
     }
 }

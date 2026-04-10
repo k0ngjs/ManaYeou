@@ -23,8 +23,9 @@ import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.HomeContent
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchHomeContent
-import com.fubuki.manarabbit.network.resolveAutoUrl
+import com.fubuki.manarabbit.network.fetchUrlFromTelegram
 import com.fubuki.manarabbit.network.searchManga
+import com.fubuki.manarabbit.ui.auth.CaptchaDialog
 import com.fubuki.manarabbit.ui.auth.CloudflareScreen
 import com.fubuki.manarabbit.ui.episode.EpisodeScreen
 import com.fubuki.manarabbit.ui.home.HomeScreen
@@ -64,6 +65,7 @@ fun MainScreen() {
     var selectedEpisode by remember { mutableStateOf<Triple<Int, String, List<Episode>>?>(null) }
     var updateListData by remember { mutableStateOf<Pair<String, List<Manga>>?>(null) }
     var showCloudflareScreen by remember { mutableStateOf(false) }
+    var showCaptchaDialog by remember { mutableStateOf(false) }
     var showAuthDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
@@ -74,7 +76,6 @@ fun MainScreen() {
     val recentMangaStr by store.recentManga.collectAsState(initial = "")
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
     val autoResolve by store.autoResolve.collectAsState(initial = false)
-    val autoResolveNumber by store.autoResolveNumber.collectAsState(initial = 0)
 
     var homeContent by remember { mutableStateOf(HomeContent()) }
     var homeLoading by remember { mutableStateOf(true) }
@@ -113,32 +114,35 @@ fun MainScreen() {
 
     // 자동 주소 탐색: baseUrl 혹은 autoResolve 설정이 바뀔 때 실행
     LaunchedEffect(baseUrl, autoResolve) {
-        if (baseUrl.isEmpty()) {
-            homeLoading = false
-            homeStatus = "설정에서 서버 주소를 입력해주세요"
+        if (!autoResolve) {
+            // 수동 모드: 저장된 URL 그대로 사용
+            if (baseUrl.isEmpty()) {
+                homeLoading = false
+                homeStatus = "설정에서 서버 주소를 입력해주세요"
+            } else {
+                loadHomeContent()
+            }
             return@LaunchedEffect
         }
-        if (autoResolve) {
-            homeLoading = true
-            homeStatus = ""
-            val resolved = resolveAutoUrl(baseUrl, autoResolveNumber)
-            when {
-                resolved == null -> {
-                    // 탐색 실패
-                    homeLoading = false
-                    homeStatus = "접속 가능한 주소를 찾지 못했습니다.\n설정에서 주소를 확인해주세요."
-                    return@LaunchedEffect
-                }
-                resolved.first != baseUrl -> {
-                    // 새 번호 발견 → 저장 후 LaunchedEffect 재실행
-                    store.saveBaseUrl(resolved.first)
-                    store.saveAutoResolveNumber(resolved.second)
-                    return@LaunchedEffect
-                }
-                // resolved.first == baseUrl → 이미 올바른 URL, 바로 로드
+
+        // 자동 모드: 텔레그램에서 최신 주소 가져오기
+        homeLoading = true
+        homeStatus = ""
+        val telegramUrl = fetchUrlFromTelegram()
+        if (telegramUrl != null) {
+            if (telegramUrl != baseUrl) {
+                // 새 주소 저장 → LaunchedEffect 재실행
+                store.saveBaseUrl(telegramUrl)
+                return@LaunchedEffect
             }
+            // 이미 최신 주소 → 바로 로드
+            loadHomeContent()
+            return@LaunchedEffect
         }
-        loadHomeContent()
+
+        // 텔레그램 실패
+        homeLoading = false
+        homeStatus = "주소를 가져오지 못했습니다.\n네트워크 상태를 확인해주세요."
     }
 
     BackHandler(enabled = selectedEpisode != null) { selectedEpisode = null }
@@ -171,10 +175,24 @@ fun MainScreen() {
             onCookieReceived = { cookies ->
                 showCloudflareScreen = false
                 scope.launch { store.saveCfCookies(cookies) }
+                // Cloudflare 완료 → 숫자 캡챠로 이동
+                showCaptchaDialog = true
             },
             onBack = { showCloudflareScreen = false }
         )
         return
+    }
+
+    if (showCaptchaDialog && baseUrl.isNotEmpty()) {
+        CaptchaDialog(
+            baseUrl = baseUrl,
+            cookieStr = cfCookies,
+            onDone = {
+                showCaptchaDialog = false
+                scope.launch { loadHomeContent() }
+            },
+            onDismiss = { showCaptchaDialog = false }
+        )
     }
 
     if (selectedEpisode != null) {
@@ -194,30 +212,26 @@ fun MainScreen() {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectTab(0) },
-                    icon = { Icon(Icons.Filled.Home, "홈") },
-                    label = { Text("홈") }
+                    icon = { Icon(Icons.Filled.Home, "홈") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectTab(1) },
-                    icon = { Icon(Icons.Filled.Search, "검색") },
-                    label = { Text("검색") }
+                    icon = { Icon(Icons.Filled.Search, "검색") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectTab(2) },
-                    icon = { Icon(Icons.Filled.Person, "마이") },
-                    label = { Text("마이") }
+                    icon = { Icon(Icons.Filled.Person, "마이") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectTab(3) },
-                    icon = { Icon(Icons.Filled.Settings, "설정") },
-                    label = { Text("설정") }
+                    icon = { Icon(Icons.Filled.Settings, "설정") }
                 )
             }
         }
@@ -251,6 +265,11 @@ fun MainScreen() {
                     items = recentListData!!,
                     onMangaClick = { manga ->
                         selectedManga = Manga(manga.mangaId, manga.mangaName, manga.thumb, manga.referer)
+                    },
+                    onDeleteItems = { toDelete ->
+                        val updated = recentListData!!.filter { it !in toDelete }
+                        scope.launch { store.saveRecentMangaList(updated) }
+                        recentListData = updated
                     },
                     onBack = { recentListData = null }
                 )

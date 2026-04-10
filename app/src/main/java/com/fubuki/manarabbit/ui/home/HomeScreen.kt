@@ -46,7 +46,10 @@ fun HomeScreen(
     val bookmarkManga = remember(bookmarkStr) { store.parseBookmarkList(bookmarkStr) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("홈", style = MaterialTheme.typography.titleLarge) })
+        TopAppBar(
+            title = { Text("홈", style = MaterialTheme.typography.titleLarge) },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+        )
 
         PullToRefreshWrapper(
             onRefresh = { onRefresh() },

@@ -90,6 +90,8 @@ fun EpisodeScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         topBar = {
             TopAppBar(
                 title = { Text(mangaDetail.info.name.ifEmpty { mangaName }, maxLines = 1) },
@@ -97,7 +99,10 @@ fun EpisodeScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, "뒤로")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { padding ->
@@ -171,6 +176,9 @@ fun EpisodeScreen(
                                 supportingContent = {
                                     Text(episode.date, style = MaterialTheme.typography.bodySmall)
                                 },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = androidx.compose.ui.graphics.Color.Transparent
+                                ),
                                 modifier = Modifier.clickable {
                                     scope.launch {
                                         store.saveRecentManga(
