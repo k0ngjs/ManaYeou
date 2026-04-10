@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Help
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +30,7 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
     val theme by store.theme.collectAsState(initial = "system")
     val autoResolve by store.autoResolve.collectAsState(initial = false)
     var showImportSuccess by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
 
     // 자동 모드일 땐 저장된 URL에서 숫자를 제거해 보여줌 (예: manatoki470.net → manatoki.net)
     val displayUrl = if (autoResolve) stripNumberFromUrl(savedUrl) else savedUrl
@@ -78,7 +81,48 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("설정", style = MaterialTheme.typography.titleLarge) })
+        TopAppBar(
+            title = { Text("설정", style = MaterialTheme.typography.titleLarge) },
+            actions = {
+                IconButton(onClick = { showHelp = true }) {
+                    Icon(Icons.Outlined.Help, contentDescription = "도움말")
+                }
+            }
+        )
+
+        if (showHelp) {
+            AlertDialog(
+                onDismissRequest = { showHelp = false },
+                title = { Text("서버 주소 도움말") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("자동 탐색 (토글 ON)", style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            "숫자를 제외한 기본 주소를 입력합니다.\n예: https://manatoki.net/\n\n" +
+                            "앱 시작 시 접속 가능한 번호를 자동으로 탐색합니다. 번호가 변경되어도 자동으로 대응합니다.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        HorizontalDivider()
+                        Text("수동 (토글 OFF)", style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            "전체 주소를 직접 입력합니다.\n예: https://manatoki469.net/",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        HorizontalDivider()
+                        Text(
+                            "접속이 안 될 때는 CAPTCHA 인증을 시도해보세요.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showHelp = false }) { Text("확인") }
+                }
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -104,16 +148,6 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                 )
             }
 
-            // 모드별 안내 + 입력 필드
-            Text(
-                if (autoResolve)
-                    "숫자를 제외한 기본 주소를 입력하세요.\n번호가 바뀌어도 자동으로 찾아 접속합니다."
-                else
-                    "접속할 전체 주소를 입력하세요.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
             OutlinedTextField(
                 value = urlInput,
                 onValueChange = { urlInput = it },
@@ -137,11 +171,6 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
 
             Text("CAPTCHA", style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary)
-            Text(
-                "서버 접속이 안될 때 인증해주세요.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Button(
                 onClick = onCfAuthClick,
                 modifier = Modifier.fillMaxWidth(),

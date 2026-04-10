@@ -53,8 +53,12 @@ fun HomeScreen(
             modifier = Modifier.weight(1f)
         ) {
             when {
-                isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                status.isNotEmpty() -> Text(status, modifier = Modifier.align(Alignment.Center))
+                isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                status.isNotEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(status, style = MaterialTheme.typography.bodyMedium)
+                }
                 else -> {
                     LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
                         if (homeContent.updated.isNotEmpty()) {
