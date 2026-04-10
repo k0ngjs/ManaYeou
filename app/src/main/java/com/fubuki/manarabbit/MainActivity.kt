@@ -113,13 +113,29 @@ fun MainScreen() {
 
     // 자동 주소 탐색: baseUrl 혹은 autoResolve 설정이 바뀔 때 실행
     LaunchedEffect(baseUrl, autoResolve) {
-        if (baseUrl.isEmpty()) return@LaunchedEffect
+        if (baseUrl.isEmpty()) {
+            homeLoading = false
+            homeStatus = "설정에서 서버 주소를 입력해주세요"
+            return@LaunchedEffect
+        }
         if (autoResolve) {
+            homeLoading = true
+            homeStatus = ""
             val resolved = resolveAutoUrl(baseUrl, autoResolveNumber)
-            if (resolved != null && resolved.first != baseUrl) {
-                store.saveBaseUrl(resolved.first)
-                store.saveAutoResolveNumber(resolved.second)
-                return@LaunchedEffect // baseUrl 변경으로 이 effect가 다시 실행됨
+            when {
+                resolved == null -> {
+                    // 탐색 실패
+                    homeLoading = false
+                    homeStatus = "접속 가능한 주소를 찾지 못했습니다.\n설정에서 주소를 확인해주세요."
+                    return@LaunchedEffect
+                }
+                resolved.first != baseUrl -> {
+                    // 새 번호 발견 → 저장 후 LaunchedEffect 재실행
+                    store.saveBaseUrl(resolved.first)
+                    store.saveAutoResolveNumber(resolved.second)
+                    return@LaunchedEffect
+                }
+                // resolved.first == baseUrl → 이미 올바른 URL, 바로 로드
             }
         }
         loadHomeContent()
