@@ -25,10 +25,13 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
 
     val savedUrl by store.baseUrl.collectAsState(initial = "")
-    var urlInput by remember(savedUrl) { mutableStateOf(savedUrl) }
     val theme by store.theme.collectAsState(initial = "system")
     val autoResolve by store.autoResolve.collectAsState(initial = false)
     var showImportSuccess by remember { mutableStateOf(false) }
+
+    // 자동 모드일 땐 저장된 URL에서 숫자를 제거해 보여줌 (예: manatoki470.net → manatoki.net)
+    val displayUrl = if (autoResolve) stripNumberFromUrl(savedUrl) else savedUrl
+    var urlInput by remember(displayUrl) { mutableStateOf(displayUrl) }
 
     val cfCookies by store.cfCookies.collectAsState(initial = "")
 
@@ -88,75 +91,45 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
             Text("서버 주소", style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary)
 
-            OutlinedTextField(
-                value = urlInput,
-                onValueChange = { urlInput = it },
-                label = { Text("주소") },
-                placeholder = { Text("예: https://manatoki469.net") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = !autoResolve
-            )
-            Button(
-                onClick = { scope.launch { store.saveBaseUrl(urlInput) } },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !autoResolve
-            ) {
-                Text("저장")
-            }
-
-            // 자동 탐색 토글
-            HorizontalDivider()
-
+            // 자동 / 수동 토글
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("주소 자동 탐색", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "사이트 번호가 바뀌어도 자동으로 찾아 접속합니다",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text("자동 탐색", style = MaterialTheme.typography.bodyLarge)
                 Switch(
                     checked = autoResolve,
-                    onCheckedChange = { enabled ->
-                        scope.launch { store.saveAutoResolve(enabled) }
-                    }
+                    onCheckedChange = { scope.launch { store.saveAutoResolve(it) } }
                 )
             }
 
-            if (autoResolve) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "자동 탐색 사용 중",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        if (savedUrl.isNotEmpty()) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "현재 접속 주소: $savedUrl",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "앱 시작 시 접속 가능한 번호를 자동으로 탐색합니다.\n주소를 한 번만 입력해두면 이후 번호 변경에 자동 대응합니다.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
+            // 모드별 안내 + 입력 필드
+            Text(
+                if (autoResolve)
+                    "숫자를 제외한 기본 주소를 입력하세요.\n번호가 바뀌어도 자동으로 찾아 접속합니다."
+                else
+                    "접속할 전체 주소를 입력하세요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            OutlinedTextField(
+                value = urlInput,
+                onValueChange = { urlInput = it },
+                label = { Text(if (autoResolve) "기본 주소 (숫자 제외)" else "서버 주소") },
+                placeholder = {
+                    Text(if (autoResolve) "https://manatoki.net/" else "https://manatoki469.net/")
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Button(
+                onClick = { scope.launch { store.saveBaseUrl(urlInput.trimEnd('/') + "/") } },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = urlInput.isNotBlank()
+            ) {
+                Text("저장")
             }
 
             // CAPTCHA
@@ -224,5 +197,18 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
 
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+/** 저장된 URL에서 숫자 부분을 제거해 기본 주소만 반환. (예: https://manatoki470.net/ → https://manatoki.net/) */
+private fun stripNumberFromUrl(url: String): String {
+    return try {
+        val trimmed = url.trimEnd('/')
+        val parsed = java.net.URL(trimmed)
+        val host = parsed.host
+        val stripped = host.replace(Regex("""^([a-zA-Z0-9\-]+?)\d+(\.[a-zA-Z.]+)$"""), "$1$2")
+        if (stripped != host) "${parsed.protocol}://$stripped/" else "$trimmed/"
+    } catch (_: Exception) {
+        url
     }
 }
