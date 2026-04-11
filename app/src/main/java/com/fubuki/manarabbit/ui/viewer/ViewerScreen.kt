@@ -45,8 +45,7 @@ import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.AuthRequiredException
-import com.fubuki.manarabbit.network.fetchEpisodeListWithSeriesId
-import com.fubuki.manarabbit.network.fetchViewerImages
+import com.fubuki.manarabbit.network.fetchViewerData
 import com.fubuki.manarabbit.network.httpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -153,12 +152,30 @@ fun ViewerScreen(
         savedPage = startPage
         scope.launch {
             try {
-                val result = fetchViewerImages(baseUrl, id, cfCookies)
-                if (result.isEmpty()) {
+                // fetchViewerData: /comic/{id} 1번 + /comic/{seriesId} 1번 = 총 2개 요청
+                val result = fetchViewerData(baseUrl, id, cfCookies)
+                if (result.images.isEmpty()) {
                     status = "이미지를 불러오지 못했습니다"
                     loadFailed = true
                     onAuthNeeded()
-                } else images = result
+                } else {
+                    images = result.images
+                    if (result.seriesId > 0) {
+                        seriesMangaId = result.seriesId
+                        if (result.episodes.isNotEmpty()) loadedEpisodeList = result.episodes
+                        store.saveRecentManga(
+                            RecentManga(
+                                mangaId = result.seriesId,
+                                mangaName = result.mangaName,
+                                thumb = result.thumb,
+                                referer = baseUrl,
+                                lastEpisodeId = id,
+                                lastEpisodeTitle = title,
+                                lastPage = startPage
+                            )
+                        )
+                    }
+                }
             } catch (e: AuthRequiredException) {
                 status = "이미지를 불러오지 못했습니다"
                 loadFailed = true
@@ -219,26 +236,6 @@ fun ViewerScreen(
             val savedRecentPage = store.parseRecentMangaList(recentStr)
                 .find { it.lastEpisodeId == currentId }?.lastPage ?: 0
             loadEpisode(currentId, currentTitle, savedRecentPage)
-            scope.launch {
-                // fetchEpisodeListWithSeriesId 내부에서 fetchMangaDetail을 호출하므로
-                // 별도 fetchMangaDetail 없이 name/thumb까지 한 번에 획득
-                val result = fetchEpisodeListWithSeriesId(baseUrl, currentId, cfCookies)
-                if (result.seriesId > 0) seriesMangaId = result.seriesId
-                if (result.episodes.isNotEmpty()) loadedEpisodeList = result.episodes
-                if (result.seriesId > 0) {
-                    store.saveRecentManga(
-                        RecentManga(
-                            mangaId = result.seriesId,
-                            mangaName = result.mangaName,
-                            thumb = result.thumb,
-                            referer = baseUrl,
-                            lastEpisodeId = currentId,
-                            lastEpisodeTitle = currentTitle,
-                            lastPage = savedRecentPage
-                        )
-                    )
-                }
-            }
         }
     }
 
