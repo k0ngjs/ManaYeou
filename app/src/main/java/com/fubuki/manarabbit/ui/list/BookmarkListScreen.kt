@@ -95,8 +95,11 @@ fun BookmarkListScreen(
             // 청크 사이 300ms 대기
             if (chunk.size == 3) delay(300)
         }
-        bookmarkItems = result.sortedByDescending { it.latestEpisodeId }
-        onItemsLoaded(bookmarkItems)
+        val sorted = result.sortedByDescending { it.latestEpisodeId }
+        bookmarkItems = sorted
+        onItemsLoaded(sorted)
+        // 정렬된 순서를 DataStore에 저장 → 홈 탭 북마크 섹션도 동일 순서 유지
+        store.saveBookmarkList(sorted.map { it.manga })
         if (refresh) isRefreshing = false else isLoading = false
     }
 
