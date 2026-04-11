@@ -46,6 +46,7 @@ import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.AuthRequiredException
 import com.fubuki.manarabbit.network.fetchViewerData
+
 import com.fubuki.manarabbit.network.httpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -59,7 +60,6 @@ import okhttp3.Request
 fun ViewerScreen(
     episodeId: Int,
     episodeTitle: String,
-    episodeList: List<Episode> = emptyList(),
     onBack: () -> Unit,
     onList: ((Int) -> Unit)? = null,
     onAuthNeeded: () -> Unit = {}
@@ -91,9 +91,9 @@ fun ViewerScreen(
     var showBars by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var currentImageIndex by remember { mutableIntStateOf(0) }
-    var loadedEpisodeList by remember { mutableStateOf(episodeList) }
+    var prevId by remember { mutableIntStateOf(0) }
+    var nextId by remember { mutableIntStateOf(0) }
     var seriesMangaId by remember { mutableIntStateOf(0) }
-    // 저장된 마지막 페이지 (에피소드 로드 후 복원에 사용)
     var savedPage by remember { mutableIntStateOf(0) }
 
     // 이미지 저장 권한 요청 (Android 9 이하)
@@ -137,9 +137,8 @@ fun ViewerScreen(
         }
     }
 
-    val currentIndex = loadedEpisodeList.indexOfFirst { it.id == currentId }
-    val hasPrev = currentIndex < loadedEpisodeList.size - 1
-    val hasNext = currentIndex > 0
+    val hasPrev = prevId > 0
+    val hasNext = nextId > 0
 
     fun loadEpisode(id: Int, title: String, startPage: Int = 0) {
         currentId = id
@@ -150,9 +149,11 @@ fun ViewerScreen(
         loadFailed = false
         currentImageIndex = startPage
         savedPage = startPage
+        prevId = 0
+        nextId = 0
         scope.launch {
             try {
-                // fetchViewerData: /comic/{id} 1번 + /comic/{seriesId} 1번 = 총 2개 요청
+                // fetchViewerData: /comic/{id} 1번만 요청
                 val result = fetchViewerData(baseUrl, id, cfCookies)
                 if (result.images.isEmpty()) {
                     status = "이미지를 불러오지 못했습니다"
@@ -160,9 +161,10 @@ fun ViewerScreen(
                     onAuthNeeded()
                 } else {
                     images = result.images
+                    prevId = result.prevId
+                    nextId = result.nextId
                     if (result.seriesId > 0) {
                         seriesMangaId = result.seriesId
-                        if (result.episodes.isNotEmpty()) loadedEpisodeList = result.episodes
                         store.saveRecentManga(
                             RecentManga(
                                 mangaId = result.seriesId,
@@ -380,7 +382,7 @@ fun ViewerScreen(
             )
         }
 
-        if (showBars && loadedEpisodeList.isNotEmpty()) {
+        if (showBars && (hasPrev || hasNext || seriesMangaId > 0)) {
             BottomAppBar(
                 modifier = Modifier.align(Alignment.BottomCenter),
                 containerColor = Color.Black.copy(alpha = 0.7f),
@@ -403,12 +405,7 @@ fun ViewerScreen(
                     }
                     Row {
                         IconButton(
-                            onClick = {
-                                if (hasPrev) {
-                                    val prev = loadedEpisodeList[currentIndex + 1]
-                                    loadEpisode(prev.id, prev.title)
-                                }
-                            },
+                            onClick = { if (hasPrev) loadEpisode(prevId, "") },
                             enabled = hasPrev
                         ) { Icon(Icons.Filled.ArrowBack, "이전화", tint = Color.White) }
                         IconButton(onClick = {
@@ -416,12 +413,7 @@ fun ViewerScreen(
                             else onBack()
                         }) { Icon(Icons.Filled.List, "목록", tint = Color.White) }
                         IconButton(
-                            onClick = {
-                                if (hasNext) {
-                                    val next = loadedEpisodeList[currentIndex - 1]
-                                    loadEpisode(next.id, next.title)
-                                }
-                            },
+                            onClick = { if (hasNext) loadEpisode(nextId, "") },
                             enabled = hasNext
                         ) { Icon(Icons.Filled.ArrowForward, "다음화", tint = Color.White) }
                     }

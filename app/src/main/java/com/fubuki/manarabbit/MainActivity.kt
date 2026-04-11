@@ -20,7 +20,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.RecentManga
-import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.HomeContent
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.AuthRequiredException
@@ -64,7 +63,7 @@ class MainActivity : ComponentActivity() {
 fun MainScreen() {
     var selectedTab by remember { mutableIntStateOf(0) }
     var selectedManga by remember { mutableStateOf<Manga?>(null) }
-    var selectedEpisode by remember { mutableStateOf<Triple<Int, String, List<Episode>>?>(null) }
+    var selectedEpisode by remember { mutableStateOf<Pair<Int, String>?>(null) }
     var updateListData by remember { mutableStateOf<Pair<String, List<Manga>>?>(null) }
     var showCloudflareScreen by remember { mutableStateOf(false) }
     var showCaptchaDialog by remember { mutableStateOf(false) }
@@ -235,7 +234,6 @@ fun MainScreen() {
         ViewerScreen(
             episodeId = selectedEpisode!!.first,
             episodeTitle = selectedEpisode!!.second,
-            episodeList = selectedEpisode!!.third,
             onBack = { selectedEpisode = null },
             onList = { seriesId ->
                 selectedEpisode = null
@@ -286,8 +284,8 @@ fun MainScreen() {
                         cachedMangaDetail = detail
                     },
                     onBack = { selectedManga = null },
-                    onEpisodeClick = { id, title, list ->
-                        selectedEpisode = Triple(id, title, list)
+                    onEpisodeClick = { id, title ->
+                        selectedEpisode = Pair(id, title)
                     },
                     onAuthNeeded = { showAuthDialog = true }
                 )
@@ -337,7 +335,7 @@ fun MainScreen() {
                             onRefresh = { loadHomeContent(forceRefresh = true) },
                             onMangaClick = { manga ->
                                 if (manga.isEpisode) {
-                                    selectedEpisode = Triple(manga.id, manga.name, emptyList())
+                                    selectedEpisode = Pair(manga.id, manga.name)
                                 } else {
                                     selectedManga = manga
                                 }

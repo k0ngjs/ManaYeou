@@ -40,7 +40,7 @@ fun EpisodeScreen(
     cachedDetail: MangaDetail = MangaDetail(),
     onDetailLoaded: (MangaDetail) -> Unit = {},
     onBack: () -> Unit,
-    onEpisodeClick: (Int, String, List<Episode>) -> Unit = { _, _, _ -> },
+    onEpisodeClick: (Int, String) -> Unit = { _, _ -> },
     onAuthNeeded: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -166,7 +166,7 @@ fun EpisodeScreen(
                                                 )
                                             )
                                         }
-                                        onEpisodeClick(first.id, first.title, mangaDetail.episodes)
+                                        onEpisodeClick(first.id, first.title)
                                     }
                                 },
                                 onBookmarkClick = {
@@ -214,7 +214,7 @@ fun EpisodeScreen(
                                             )
                                         )
                                     }
-                                    onEpisodeClick(episode.id, episode.title, mangaDetail.episodes)
+                                    onEpisodeClick(episode.id, episode.title)
                                 }
                             )
                             HorizontalDivider(thickness = 0.5.dp)

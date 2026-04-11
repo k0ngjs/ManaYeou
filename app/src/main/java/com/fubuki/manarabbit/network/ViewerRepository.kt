@@ -1,6 +1,5 @@
 package com.fubuki.manarabbit.network
 
-import com.fubuki.manarabbit.data.Episode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -9,21 +8,23 @@ import java.net.URLDecoder
 
 data class ViewerResult(
     val images: List<String>,
-    val episodes: List<Episode>,
+    val prevId: Int,   // 이전화 episode ID (없으면 0)
+    val nextId: Int,   // 다음화 episode ID (없으면 0)
+    val prevTitle: String,
+    val nextTitle: String,
     val seriesId: Int,
     val mangaName: String,
     val thumb: String
 )
 
 /**
- * /comic/{episodeId} 한 번 + /comic/{seriesId} 한 번 = 총 2개 요청으로
- * 이미지 목록 + 에피소드 목록 + 만화 정보를 모두 가져옴
+ * /comic/{episodeId} 한 번만 요청해서
+ * 이미지 + 이전화/다음화 ID + seriesId + 만화 이름 + 썸네일 모두 파싱
  */
 suspend fun fetchViewerData(baseUrl: String, episodeId: Int, cookieStr: String = ""): ViewerResult {
     return withContext(Dispatchers.IO) {
         val cleanUrl = baseUrl.trimEnd('/')
 
-        // 1번 요청: /comic/{episodeId} — 이미지 + seriesId 동시 파싱
         val request = Request.Builder()
             .url("$cleanUrl/comic/$episodeId")
             .header("User-Agent", USER_AGENT)
@@ -33,32 +34,44 @@ suspend fun fetchViewerData(baseUrl: String, episodeId: Int, cookieStr: String =
         val response = httpClient.newCall(request).execute()
         if (response.code == 403) { response.close(); throw AuthRequiredException() }
         val body = response.use { it.body?.string() }
-            ?: return@withContext ViewerResult(emptyList(), emptyList(), 0, "", "")
+            ?: return@withContext ViewerResult(emptyList(), 0, 0, "", "", 0, "", "")
 
         val doc = Jsoup.parse(body)
 
         // 이미지 파싱
         val images = parseImages(doc, cleanUrl)
 
-        // seriesId 파싱
-        val seriesId = doc.selectFirst("div.toon-nav")
-            ?.select("a")?.last()
+        // toon-nav에서 이전화/다음화/seriesId 파싱
+        val nav = doc.selectFirst("div.toon-nav")
+        val prevHref = nav?.selectFirst("a#goPrevBtn")?.attr("href") ?: ""
+        val nextHref = nav?.selectFirst("a#goNextBtn")?.attr("href") ?: ""
+        val prevId = prevHref.split("comic/").getOrNull(1)
+            ?.split("?")?.firstOrNull()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+        val nextId = nextHref.split("comic/").getOrNull(1)
+            ?.split("?")?.firstOrNull()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+        val prevTitle = nav?.selectFirst("a#goPrevBtn")?.attr("alt") ?: ""
+        val nextTitle = nav?.selectFirst("a#goNextBtn")?.attr("alt") ?: ""
+
+        // 목록 링크(last)에서 seriesId 파싱
+        val seriesId = nav?.select("a")?.last()
             ?.attr("href")?.split("comic/")?.getOrNull(1)
             ?.split("?")?.firstOrNull()
             ?.filter { it.isDigit() }?.toIntOrNull() ?: 0
 
-        if (seriesId == 0) {
-            return@withContext ViewerResult(images, emptyList(), 0, "", "")
-        }
+        // 만화 이름 + 썸네일은 페이지 내 meta/header에서 파싱
+        val mangaName = doc.selectFirst("meta[property=og:title]")?.attr("content")
+            ?: doc.selectFirst("div.toon-title h1")?.text() ?: ""
+        val thumb = doc.selectFirst("meta[property=og:image]")?.attr("content") ?: ""
 
-        // 2번 요청: /comic/{seriesId} — 에피소드 목록 + 만화 이름 + 썸네일
-        val detail = fetchMangaDetail(cleanUrl, seriesId, cookieStr)
         ViewerResult(
             images = images,
-            episodes = detail.episodes,
+            prevId = prevId,
+            nextId = nextId,
+            prevTitle = prevTitle,
+            nextTitle = nextTitle,
             seriesId = seriesId,
-            mangaName = detail.info.name,
-            thumb = detail.info.thumb
+            mangaName = mangaName,
+            thumb = thumb
         )
     }
 }
