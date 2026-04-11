@@ -88,6 +88,7 @@ fun ViewerScreen(
     var images by remember { mutableStateOf<List<String>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
+    var loadFailed by remember { mutableStateOf(false) }
     var showBars by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var currentImageIndex by remember { mutableIntStateOf(0) }
@@ -147,15 +148,24 @@ fun ViewerScreen(
         images = emptyList()
         isLoading = true
         status = ""
+        loadFailed = false
         currentImageIndex = startPage
         savedPage = startPage
         scope.launch {
             val result = fetchViewerImages(baseUrl, id, cfCookies)
             if (result.isEmpty()) {
                 status = "이미지를 불러오지 못했습니다"
+                loadFailed = true
                 onAuthNeeded()
             } else images = result
             isLoading = false
+        }
+    }
+
+    // 인증 완료 후 cfCookies가 업데이트되면 자동으로 재시도
+    LaunchedEffect(cfCookies) {
+        if (loadFailed && cfCookies.isNotEmpty() && baseUrl.isNotEmpty()) {
+            loadEpisode(currentId, currentTitle, currentImageIndex)
         }
     }
 
