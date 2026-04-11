@@ -40,6 +40,7 @@ fun UpdateListScreen(
                         Icon(Icons.Filled.ArrowBack, "뒤로")
                     }
                 },
+                windowInsets = WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }

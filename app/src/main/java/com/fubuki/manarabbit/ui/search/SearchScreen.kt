@@ -39,6 +39,7 @@ fun SearchScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("검색", style = MaterialTheme.typography.titleLarge) },
+            windowInsets = WindowInsets(0),
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
         )
 

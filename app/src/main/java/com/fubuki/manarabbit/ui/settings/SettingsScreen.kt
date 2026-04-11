@@ -95,6 +95,7 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                     Icon(Icons.Outlined.Help, contentDescription = "도움말")
                 }
             },
+            windowInsets = WindowInsets(0),
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
         )
 

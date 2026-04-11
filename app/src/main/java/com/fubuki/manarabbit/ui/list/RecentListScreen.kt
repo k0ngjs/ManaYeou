@@ -39,6 +39,7 @@ fun RecentListScreen(
         topBar = {
             TopAppBar(
                 title = { Text("최근 본 만화") },
+                windowInsets = WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
                 navigationIcon = {
                     IconButton(onClick = {
