@@ -28,9 +28,8 @@ import com.fubuki.manarabbit.network.fetchEpisodeList
 import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,9 +55,11 @@ fun BookmarkListScreen(
 
     suspend fun loadBookmarks(refresh: Boolean = false) {
         if (refresh) isRefreshing = true else isLoading = true
-        val result = coroutineScope {
-            items.map { manga ->
-                async(Dispatchers.IO) {
+        // 한 번에 3개씩 순차 처리하여 서버 과부하 방지
+        val result = mutableListOf<BookmarkedManga>()
+        for (chunk in items.chunked(3)) {
+            for (manga in chunk) {
+                val item = withContext(Dispatchers.IO) {
                     try {
                         if (manga.thumb.isEmpty()) {
                             val detail = fetchMangaDetail(baseUrl, manga.id, cfCookies)
@@ -89,7 +90,10 @@ fun BookmarkListScreen(
                         BookmarkedManga(manga = manga)
                     }
                 }
-            }.awaitAll()
+                result.add(item)
+            }
+            // 청크 사이 300ms 대기
+            if (chunk.size == 3) delay(300)
         }
         bookmarkItems = result.sortedByDescending { it.latestEpisodeId }
         onItemsLoaded(bookmarkItems)

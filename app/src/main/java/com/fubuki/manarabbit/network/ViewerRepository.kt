@@ -77,7 +77,14 @@ suspend fun fetchViewerImages(baseUrl: String, episodeId: Int, cookieStr: String
     }
 }
 
-suspend fun fetchEpisodeListWithSeriesId(baseUrl: String, episodeId: Int, cookieStr: String = ""): Pair<List<Episode>, Int> {
+data class EpisodeSeriesResult(
+    val episodes: List<Episode>,
+    val seriesId: Int,
+    val mangaName: String,
+    val thumb: String
+)
+
+suspend fun fetchEpisodeListWithSeriesId(baseUrl: String, episodeId: Int, cookieStr: String = ""): EpisodeSeriesResult {
     return withContext(Dispatchers.IO) {
         try {
             val cleanUrl = baseUrl.trimEnd('/')
@@ -89,21 +96,27 @@ suspend fun fetchEpisodeListWithSeriesId(baseUrl: String, episodeId: Int, cookie
                 .build()
             val response = httpClient.newCall(request).execute()
             if (response.code == 403) { response.close(); throw AuthRequiredException() }
-            val body = response.use { it.body?.string() } ?: return@withContext Pair(emptyList(), 0)
+            val body = response.use { it.body?.string() } ?: return@withContext EpisodeSeriesResult(emptyList(), 0, "", "")
 
             val doc = Jsoup.parse(body)
-            val navbar = doc.selectFirst("div.toon-nav") ?: return@withContext Pair(emptyList(), 0)
+            val navbar = doc.selectFirst("div.toon-nav") ?: return@withContext EpisodeSeriesResult(emptyList(), 0, "", "")
             val seriesId = navbar.select("a").last()
                 ?.attr("href")?.split("comic/")?.getOrNull(1)
                 ?.split("?")?.firstOrNull()
-                ?.filter { it.isDigit() }?.toIntOrNull() ?: return@withContext Pair(emptyList(), 0)
+                ?.filter { it.isDigit() }?.toIntOrNull() ?: return@withContext EpisodeSeriesResult(emptyList(), 0, "", "")
 
-            val episodes = fetchEpisodeList(cleanUrl, seriesId, cookieStr)
-            Pair(episodes, seriesId)
+            // seriesId로 detail을 한 번만 요청 — episodes + name + thumb 동시 획득
+            val detail = fetchMangaDetail(cleanUrl, seriesId, cookieStr)
+            EpisodeSeriesResult(
+                episodes = detail.episodes,
+                seriesId = seriesId,
+                mangaName = detail.info.name,
+                thumb = detail.info.thumb
+            )
         } catch (e: AuthRequiredException) {
             throw e
         } catch (e: Exception) {
-            Pair(emptyList(), 0)
+            EpisodeSeriesResult(emptyList(), 0, "", "")
         }
     }
 }

@@ -46,7 +46,6 @@ import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.AuthRequiredException
 import com.fubuki.manarabbit.network.fetchEpisodeListWithSeriesId
-import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.network.fetchViewerImages
 import com.fubuki.manarabbit.network.httpClient
 import kotlinx.coroutines.Dispatchers
@@ -216,25 +215,22 @@ fun ViewerScreen(
 
     LaunchedEffect(currentId, baseUrl) {
         if (baseUrl.isNotEmpty()) {
-            // 저장된 마지막 페이지를 에피소드ID로 바로 검색 (mangaId 불필요)
             val recentStr = store.recentManga.first()
             val savedRecentPage = store.parseRecentMangaList(recentStr)
                 .find { it.lastEpisodeId == currentId }?.lastPage ?: 0
             loadEpisode(currentId, currentTitle, savedRecentPage)
             scope.launch {
-                val pair = fetchEpisodeListWithSeriesId(baseUrl, currentId, cfCookies)
-                if (pair.second > 0) seriesMangaId = pair.second
-                if (pair.first.isNotEmpty()) {
-                    loadedEpisodeList = pair.first
-                }
-                val mangaId = if (pair.second > 0) pair.second else seriesMangaId
-                if (mangaId > 0) {
-                    val detail = fetchMangaDetail(baseUrl, mangaId, cfCookies)
+                // fetchEpisodeListWithSeriesId 내부에서 fetchMangaDetail을 호출하므로
+                // 별도 fetchMangaDetail 없이 name/thumb까지 한 번에 획득
+                val result = fetchEpisodeListWithSeriesId(baseUrl, currentId, cfCookies)
+                if (result.seriesId > 0) seriesMangaId = result.seriesId
+                if (result.episodes.isNotEmpty()) loadedEpisodeList = result.episodes
+                if (result.seriesId > 0) {
                     store.saveRecentManga(
                         RecentManga(
-                            mangaId = mangaId,
-                            mangaName = detail.info.name,
-                            thumb = detail.info.thumb,
+                            mangaId = result.seriesId,
+                            mangaName = result.mangaName,
+                            thumb = result.thumb,
                             referer = baseUrl,
                             lastEpisodeId = currentId,
                             lastEpisodeTitle = currentTitle,
