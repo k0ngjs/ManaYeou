@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -19,7 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.fubuki.manarabbit.data.BackupManager
 import com.fubuki.manarabbit.data.SettingsDataStore
@@ -98,28 +101,13 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
         if (showHelp) {
             AlertDialog(
                 onDismissRequest = { showHelp = false },
-                title = { Text("서버 주소 도움말") },
+                title = { Text("설정 도움말") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("자동 탐색 ON", style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary)
-                        Text(
-                            "텔레그램 공지에서 최신 주소를 자동으로 가져옵니다.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        HorizontalDivider()
-                        Text("자동 탐색 OFF", style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary)
-                        Text(
-                            "주소를 직접 입력합니다.\n예: https://manatoki469.net/",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        HorizontalDivider()
-                        Text(
-                            "접속이 안 될 때는 CAPTCHA 인증을 시도해보세요.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        HelpItem("자동 탐색 ON", "앱 시작 시 텔레그램에서 최신 주소를 자동으로 가져옵니다.")
+                        HelpItem("자동 탐색 OFF", "주소를 직접 입력 후 키보드의 확인을 누르면 저장됩니다.")
+                        HelpItem("CAPTCHA 인증", "접속이 안 될 때 사용합니다. 클라우드플레어 인증 완료 후 숫자를 입력하세요.")
+                        HelpItem("데이터 백업", "북마크·최근 목록을 파일로 내보내거나 가져옵니다.")
                     }
                 },
                 confirmButton = {
@@ -130,7 +118,7 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -168,7 +156,7 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                     if (autoResolve) {
                         // 읽기 전용
                         Text(
-                            text = if (savedUrl.isNotEmpty()) savedUrl else "앱 시작 시 자동으로 가져옵니다",
+                            text = if (savedUrl.isNotEmpty()) savedUrl else "주소 불러오는 중...",
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (savedUrl.isNotEmpty())
                                 MaterialTheme.colorScheme.onSurface
@@ -190,18 +178,6 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                                 focusManager.clearFocus()
                             }),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            decorationBox = { innerTextField ->
-                                Box {
-                                    if (urlInput.isEmpty()) {
-                                        Text(
-                                            "https://manatoki469.net/",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    innerTextField()
-                                }
-                            },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -272,5 +248,43 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
 
             Spacer(Modifier.height(8.dp))
         }
+
+        // 고정 최하단: 버전 + GitHub
+        val versionName = remember {
+            try { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
+            catch (_: Exception) { "?" }
+        }
+        val uriHandler = LocalUriHandler.current
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "버전 $versionName",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "GitHub",
+                style = MaterialTheme.typography.bodySmall.copy(textDecoration = TextDecoration.Underline),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    uriHandler.openUri("https://github.com/k0ngjs/ManaYeou")
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun HelpItem(title: String, description: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(title, style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary)
+        Text(description, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

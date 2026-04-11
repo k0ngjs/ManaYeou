@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -42,6 +43,7 @@ fun CaptchaDialog(
     var isLoading by remember { mutableStateOf(true) }
     var isSubmitting by remember { mutableStateOf(false) }
     var phpSessionId by remember { mutableStateOf("") }
+    var retryCount by remember { mutableIntStateOf(0) }
 
     val client = remember {
         OkHttpClient.Builder().followRedirects(true).build()
@@ -54,12 +56,14 @@ fun CaptchaDialog(
         return parts.joinToString("; ")
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(retryCount) {
+        isLoading = true
+        captchaImage = null
         withContext(Dispatchers.IO) {
             try {
                 val cleanUrl = baseUrl.trimEnd('/')
 
-                // 1. 세션 초기화 → PHPSESSID 획득
+                // 1. 세션 초기화 → PHPSESSID 획득 (모든 Set-Cookie 헤더 검사)
                 val sessionResp = client.newCall(
                     Request.Builder()
                         .url("$cleanUrl/plugin/kcaptcha/kcaptcha_session.php")
@@ -69,10 +73,9 @@ fun CaptchaDialog(
                         .header("Cookie", cookieStr)
                         .build()
                 ).execute()
-                val setCookie = sessionResp.header("Set-Cookie") ?: ""
-                phpSessionId = setCookie.split(";").firstOrNull()
-                    ?.takeIf { it.contains("PHPSESSID=") }
-                    ?.substringAfter("PHPSESSID=") ?: ""
+                phpSessionId = sessionResp.headers("Set-Cookie")
+                    .firstOrNull { it.contains("PHPSESSID=") }
+                    ?.let { Regex("PHPSESSID=([^;]+)").find(it)?.groupValues?.get(1) } ?: ""
                 sessionResp.close()
 
                 // 2. 캡챠 이미지 로드
@@ -123,7 +126,7 @@ fun CaptchaDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("숫자 인증") },
+        title = { Text("CAPTCHA 인증") },
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -135,13 +138,15 @@ fun CaptchaDialog(
                     captchaImage != null -> Image(
                         bitmap = captchaImage!!,
                         contentDescription = "캡챠 이미지",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(70.dp)
+                        modifier = Modifier.fillMaxWidth().height(70.dp)
                     )
-                    else -> Text("이미지를 불러오지 못했습니다",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error)
+                    else -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("이미지를 불러오지 못했습니다",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = { retryCount++ }) { Text("재시도") }
+                    }
                 }
                 OutlinedTextField(
                     value = answer,

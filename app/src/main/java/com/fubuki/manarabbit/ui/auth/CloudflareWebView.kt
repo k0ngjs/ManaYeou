@@ -85,6 +85,10 @@ fun CloudflareScreen(
                         settings.userAgentString = USER_AGENT
 
                         webViewClient = object : WebViewClient() {
+                            // 첫 번째 onPageFinished 이후에만 빠른 감지 활성화
+                            // (기존 cf_clearance 쿠키로 인한 즉시 닫힘 방지)
+                            private var initialLoadDone = false
+
                             override fun shouldInterceptRequest(
                                 view: WebView,
                                 request: WebResourceRequest
@@ -92,6 +96,13 @@ fun CloudflareScreen(
                                 // WebView 실제 UA를 OkHttp와 동기화
                                 request.requestHeaders["User-Agent"]?.takeIf { it.isNotEmpty() }
                                     ?.let { USER_AGENT = it }
+                                // 첫 페이지 로드 완료 후에만 빠른 감지 활성화
+                                if (initialLoadDone) {
+                                    val cookies = CookieManager.getInstance().getCookie(request.url.toString()) ?: ""
+                                    if (cookies.contains("cf_clearance")) {
+                                        view.post { finish() }
+                                    }
+                                }
                                 return super.shouldInterceptRequest(view, request)
                             }
 
@@ -101,11 +112,11 @@ fun CloudflareScreen(
                                     document.querySelectorAll('[class*="id_bbn"]')
                                         .forEach(function(el) { el.style.display='none'; });
                                 """.trimIndent(), null)
-                                // cf_clearance 쿠키가 생겼을 때만 완료 처리
                                 val cookies = CookieManager.getInstance().getCookie(resUrl) ?: ""
                                 if (cookies.contains("cf_clearance")) {
                                     finish()
                                 }
+                                initialLoadDone = true
                                 super.onPageFinished(view, resUrl)
                             }
                         }

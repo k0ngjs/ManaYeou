@@ -22,6 +22,7 @@ import com.fubuki.manarabbit.data.BookmarkedManga
 import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchEpisodeList
+import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -47,20 +48,39 @@ fun BookmarkListScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
 
+
     suspend fun loadBookmarks(refresh: Boolean = false) {
         if (refresh) isRefreshing = true else isLoading = true
         val result = coroutineScope {
             items.map { manga ->
                 async(Dispatchers.IO) {
                     try {
-                        val episodes = fetchEpisodeList(baseUrl, manga.id, cfCookies)
-                        val latest = episodes.firstOrNull()
-                        BookmarkedManga(
-                            manga = manga,
-                            latestEpisodeId = latest?.id ?: 0,
-                            latestEpisodeTitle = latest?.title ?: "",
-                            latestEpisodeDate = latest?.date ?: ""
-                        )
+                        if (manga.thumb.isEmpty()) {
+                            // thumb 없는 항목은 detail로 thumb + 최신화 동시 획득
+                            val detail = fetchMangaDetail(baseUrl, manga.id, cfCookies)
+                            val latest = detail.episodes.firstOrNull()
+                            val updatedManga = manga.copy(
+                                name = detail.info.name.ifEmpty { manga.name },
+                                thumb = detail.info.thumb,
+                                referer = baseUrl
+                            )
+                            store.updateBookmarkThumb(updatedManga)
+                            BookmarkedManga(
+                                manga = updatedManga,
+                                latestEpisodeId = latest?.id ?: 0,
+                                latestEpisodeTitle = latest?.title ?: "",
+                                latestEpisodeDate = latest?.date ?: ""
+                            )
+                        } else {
+                            val episodes = fetchEpisodeList(baseUrl, manga.id, cfCookies)
+                            val latest = episodes.firstOrNull()
+                            BookmarkedManga(
+                                manga = manga,
+                                latestEpisodeId = latest?.id ?: 0,
+                                latestEpisodeTitle = latest?.title ?: "",
+                                latestEpisodeDate = latest?.date ?: ""
+                            )
+                        }
                     } catch (e: Exception) {
                         BookmarkedManga(manga = manga)
                     }

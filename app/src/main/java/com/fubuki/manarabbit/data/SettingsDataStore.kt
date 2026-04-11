@@ -128,6 +128,25 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    suspend fun updateBookmarkThumb(manga: Manga) {
+        context.dataStore.edit { prefs ->
+            val current = parseBookmarkList(prefs[BOOKMARK_MANGA_KEY] ?: "")
+            val updated = current.map { if (it.id == manga.id) manga else it }
+            prefs[BOOKMARK_MANGA_KEY] = serializeBookmarkList(updated)
+        }
+    }
+
+    suspend fun saveRecentMangaPage(mangaId: Int, episodeId: Int, page: Int) {
+        context.dataStore.edit { prefs ->
+            val current = parseRecentMangaList(prefs[RECENT_MANGA_KEY] ?: "")
+            val updated = current.map {
+                if (it.mangaId == mangaId && it.lastEpisodeId == episodeId) it.copy(lastPage = page)
+                else it
+            }
+            prefs[RECENT_MANGA_KEY] = serializeRecentMangaList(updated)
+        }
+    }
+
     suspend fun saveRecentMangaList(list: List<RecentManga>) {
         context.dataStore.edit { prefs ->
             prefs[RECENT_MANGA_KEY] = serializeRecentMangaList(list)
@@ -161,7 +180,7 @@ class SettingsDataStore(private val context: Context) {
 
     fun serializeRecentMangaList(list: List<RecentManga>): String {
         return list.joinToString("|") {
-            "${it.mangaId}::${it.mangaName}::${it.thumb}::${it.referer}::${it.lastEpisodeId}::${it.lastEpisodeTitle}"
+            "${it.mangaId}::${it.mangaName}::${it.thumb}::${it.referer}::${it.lastEpisodeId}::${it.lastEpisodeTitle}::${it.lastPage}"
         }
     }
 
@@ -176,7 +195,8 @@ class SettingsDataStore(private val context: Context) {
                     thumb = parts[2],
                     referer = parts[3],
                     lastEpisodeId = parts[4].toIntOrNull() ?: return@mapNotNull null,
-                    lastEpisodeTitle = parts[5]
+                    lastEpisodeTitle = parts[5],
+                    lastPage = parts.getOrNull(6)?.toIntOrNull() ?: 0
                 )
             } else null
         }

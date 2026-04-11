@@ -43,60 +43,92 @@ object BackupManager {
 
     suspend fun importBackup(context: Context, uri: Uri, store: SettingsDataStore, baseUrl: String, cfCookies: String, onComplete: () -> Unit) {
         try {
-            val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return
+            val content = context.contentResolver.openInputStream(uri)
+                ?.bufferedReader(Charsets.UTF_8)?.readText() ?: return
 
-            val json = JSONObject(content)
-            val cleanUrl = baseUrl.trimEnd('/')
-
-            val bookmarkArray = json.optJSONArray("b") ?: JSONArray()
-            val bookmarkList = mutableListOf<Manga>()
-            for (i in 0 until bookmarkArray.length()) {
-                val mangaId = bookmarkArray.getInt(i)
-                try {
-                    val detail = fetchMangaDetail(cleanUrl, mangaId, cfCookies)
-                    if (detail.info.name.isNotEmpty()) {
-                        bookmarkList.add(Manga(mangaId, detail.info.name, detail.info.thumb, cleanUrl))
-                    } else {
-                        bookmarkList.add(Manga(mangaId, "", "", cleanUrl))
-                    }
-                } catch (e: Exception) {
-                    bookmarkList.add(Manga(mangaId, "", "", cleanUrl))
-                }
+            // TSV 형식 감지 (첫 줄이 "순번\t유형\t..." 또는 탭 구분자 포함)
+            if (content.trimStart().startsWith("순번") || content.contains("\t")) {
+                importTsv(content, store)
+            } else {
+                importJson(content, store, baseUrl, cfCookies)
             }
-            val existingBookmark = store.parseBookmarkList(store.bookmarkManga.first())
-            val mergedBookmark = (bookmarkList + existingBookmark).distinctBy { it.id }
-            store.saveBookmarkList(mergedBookmark)
-
-            val recentArray = json.optJSONArray("r") ?: JSONArray()
-            val recentList = mutableListOf<RecentManga>()
-            for (i in 0 until recentArray.length()) {
-                val arr = recentArray.getJSONArray(i)
-                val mangaId = arr.getInt(0)
-                val lastEpisodeId = arr.getInt(1)
-                try {
-                    val detail = fetchMangaDetail(cleanUrl, mangaId, cfCookies)
-                    val episode = detail.episodes.find { it.id == lastEpisodeId }
-                    recentList.add(
-                        RecentManga(
-                            mangaId = mangaId,
-                            mangaName = detail.info.name,
-                            thumb = detail.info.thumb,
-                            referer = cleanUrl,
-                            lastEpisodeId = lastEpisodeId,
-                            lastEpisodeTitle = episode?.title ?: ""
-                        )
-                    )
-                } catch (e: Exception) {
-                    recentList.add(RecentManga(mangaId, "", "", cleanUrl, lastEpisodeId, ""))
-                }
-            }
-            val existingRecent = store.parseRecentMangaList(store.recentManga.first())
-            val mergedRecent = (recentList + existingRecent).distinctBy { it.mangaId }.take(20)
-            store.saveRecentMangaList(mergedRecent)
-
             onComplete()
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    /** manatoki TSV 북마크 내보내기 형식 (순번·유형·표지·회차·링크) */
+    private suspend fun importTsv(content: String, store: SettingsDataStore) {
+        val imported = content.lines()
+            .drop(1) // 헤더 건너뜀
+            .mapNotNull { line ->
+                val cols = line.split("\t")
+                if (cols.size < 5) return@mapNotNull null
+                val name = cols[2].trim().ifEmpty { return@mapNotNull null }
+                val url  = cols[4].trim().ifEmpty { return@mapNotNull null }
+                val id   = Regex("""/comic/(\d+)""").find(url)
+                    ?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+                val referer = Regex("""https?://[^/]+""").find(url)?.value
+                    ?.let { "$it/" } ?: ""
+                Manga(id = id, name = name, thumb = "", referer = referer)
+            }
+
+        val existing = store.parseBookmarkList(store.bookmarkManga.first())
+        val existingIds = existing.map { it.id }.toSet()
+        val merged = existing + imported.filter { it.id !in existingIds }
+        store.saveBookmarkList(merged)
+    }
+
+    /** 기존 .yeou JSON 형식 */
+    private suspend fun importJson(content: String, store: SettingsDataStore, baseUrl: String, cfCookies: String) {
+        val json = JSONObject(content)
+        val cleanUrl = baseUrl.trimEnd('/')
+
+        val bookmarkArray = json.optJSONArray("b") ?: JSONArray()
+        val bookmarkList = mutableListOf<Manga>()
+        for (i in 0 until bookmarkArray.length()) {
+            val mangaId = bookmarkArray.getInt(i)
+            try {
+                val detail = fetchMangaDetail(cleanUrl, mangaId, cfCookies)
+                if (detail.info.name.isNotEmpty()) {
+                    bookmarkList.add(Manga(mangaId, detail.info.name, detail.info.thumb, cleanUrl))
+                } else {
+                    bookmarkList.add(Manga(mangaId, "", "", cleanUrl))
+                }
+            } catch (e: Exception) {
+                bookmarkList.add(Manga(mangaId, "", "", cleanUrl))
+            }
+        }
+        val existingBookmark = store.parseBookmarkList(store.bookmarkManga.first())
+        val mergedBookmark = (bookmarkList + existingBookmark).distinctBy { it.id }
+        store.saveBookmarkList(mergedBookmark)
+
+        val recentArray = json.optJSONArray("r") ?: JSONArray()
+        val recentList = mutableListOf<RecentManga>()
+        for (i in 0 until recentArray.length()) {
+            val arr = recentArray.getJSONArray(i)
+            val mangaId = arr.getInt(0)
+            val lastEpisodeId = arr.getInt(1)
+            try {
+                val detail = fetchMangaDetail(cleanUrl, mangaId, cfCookies)
+                val episode = detail.episodes.find { it.id == lastEpisodeId }
+                recentList.add(
+                    RecentManga(
+                        mangaId = mangaId,
+                        mangaName = detail.info.name,
+                        thumb = detail.info.thumb,
+                        referer = cleanUrl,
+                        lastEpisodeId = lastEpisodeId,
+                        lastEpisodeTitle = episode?.title ?: ""
+                    )
+                )
+            } catch (e: Exception) {
+                recentList.add(RecentManga(mangaId, "", "", cleanUrl, lastEpisodeId, ""))
+            }
+        }
+        val existingRecent = store.parseRecentMangaList(store.recentManga.first())
+        val mergedRecent = (recentList + existingRecent).distinctBy { it.mangaId }.take(20)
+        store.saveRecentMangaList(mergedRecent)
     }
 }

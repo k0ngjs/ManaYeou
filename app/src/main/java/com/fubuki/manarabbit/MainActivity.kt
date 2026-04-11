@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.Episode
@@ -67,6 +68,8 @@ fun MainScreen() {
     var showCloudflareScreen by remember { mutableStateOf(false) }
     var showCaptchaDialog by remember { mutableStateOf(false) }
     var showAuthDialog by remember { mutableStateOf(false) }
+    // CF 완료 시 쿠키를 바로 CaptchaDialog에 전달 (DataStore 업데이트 대기 불필요)
+    var pendingCfCookies by remember { mutableStateOf("") }
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
     val baseUrl by store.baseUrl.collectAsState(initial = "")
@@ -174,9 +177,12 @@ fun MainScreen() {
             url = baseUrl,
             onCookieReceived = { cookies ->
                 showCloudflareScreen = false
-                scope.launch { store.saveCfCookies(cookies) }
-                // Cloudflare 완료 → 숫자 캡챠로 이동
-                showCaptchaDialog = true
+                // 쿠키를 로컬에 바로 저장 후 DataStore에도 저장 (순서 보장)
+                pendingCfCookies = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                scope.launch {
+                    store.saveCfCookies(cookies)
+                    showCaptchaDialog = true
+                }
             },
             onBack = { showCloudflareScreen = false }
         )
@@ -186,7 +192,7 @@ fun MainScreen() {
     if (showCaptchaDialog && baseUrl.isNotEmpty()) {
         CaptchaDialog(
             baseUrl = baseUrl,
-            cookieStr = cfCookies,
+            cookieStr = pendingCfCookies.ifEmpty { cfCookies },
             onDone = {
                 showCaptchaDialog = false
                 scope.launch { loadHomeContent() }
@@ -212,26 +218,29 @@ fun MainScreen() {
 
     Scaffold(
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.height(64.dp)
+            ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectTab(0) },
-                    icon = { Icon(Icons.Filled.Home, "홈") }
+                    icon = { Icon(Icons.Filled.Home, "홈", modifier = Modifier.size(22.dp)) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectTab(1) },
-                    icon = { Icon(Icons.Filled.Search, "검색") }
+                    icon = { Icon(Icons.Filled.Search, "검색", modifier = Modifier.size(22.dp)) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectTab(2) },
-                    icon = { Icon(Icons.Filled.Person, "마이") }
+                    icon = { Icon(Icons.Filled.Person, "마이", modifier = Modifier.size(22.dp)) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectTab(3) },
-                    icon = { Icon(Icons.Filled.Settings, "설정") }
+                    icon = { Icon(Icons.Filled.Settings, "설정", modifier = Modifier.size(22.dp)) }
                 )
             }
         }

@@ -49,6 +49,7 @@ import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.network.fetchViewerImages
 import com.fubuki.manarabbit.network.httpClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -92,6 +93,8 @@ fun ViewerScreen(
     var currentImageIndex by remember { mutableIntStateOf(0) }
     var loadedEpisodeList by remember { mutableStateOf(episodeList) }
     var seriesMangaId by remember { mutableIntStateOf(0) }
+    // 저장된 마지막 페이지 (에피소드 로드 후 복원에 사용)
+    var savedPage by remember { mutableIntStateOf(0) }
 
     // 이미지 저장 권한 요청 (Android 9 이하)
     val writePermissionLauncher = rememberLauncherForActivityResult(
@@ -138,13 +141,14 @@ fun ViewerScreen(
     val hasPrev = currentIndex < loadedEpisodeList.size - 1
     val hasNext = currentIndex > 0
 
-    fun loadEpisode(id: Int, title: String) {
+    fun loadEpisode(id: Int, title: String, startPage: Int = 0) {
         currentId = id
         currentTitle = title
         images = emptyList()
         isLoading = true
         status = ""
-        currentImageIndex = 0
+        currentImageIndex = startPage
+        savedPage = startPage
         scope.launch {
             val result = fetchViewerImages(baseUrl, id, cfCookies)
             if (result.isEmpty()) {
@@ -168,9 +172,11 @@ fun ViewerScreen(
 
     LaunchedEffect(pages) {
         if (pages.isNotEmpty() && images.isNotEmpty()) {
-            val targetImg = images.getOrNull(currentImageIndex) ?: return@LaunchedEffect
+            val restoreTo = savedPage.coerceIn(0, images.size - 1)
+            val targetImg = images.getOrNull(restoreTo) ?: return@LaunchedEffect
             val targetPage = pages.indexOfFirst { it.contains(targetImg) }.takeIf { it >= 0 } ?: 0
             pagerState.scrollToPage(targetPage)
+            if (restoreTo > 0) listState.scrollToItem(restoreTo)
         }
     }
 
@@ -193,7 +199,11 @@ fun ViewerScreen(
 
     LaunchedEffect(currentId, baseUrl) {
         if (baseUrl.isNotEmpty()) {
-            loadEpisode(currentId, currentTitle)
+            // 저장된 마지막 페이지를 에피소드ID로 바로 검색 (mangaId 불필요)
+            val recentStr = store.recentManga.first()
+            val savedRecentPage = store.parseRecentMangaList(recentStr)
+                .find { it.lastEpisodeId == currentId }?.lastPage ?: 0
+            loadEpisode(currentId, currentTitle, savedRecentPage)
             scope.launch {
                 val pair = fetchEpisodeListWithSeriesId(baseUrl, currentId, cfCookies)
                 if (pair.second > 0) seriesMangaId = pair.second
@@ -210,11 +220,19 @@ fun ViewerScreen(
                             thumb = detail.info.thumb,
                             referer = baseUrl,
                             lastEpisodeId = currentId,
-                            lastEpisodeTitle = currentTitle
+                            lastEpisodeTitle = currentTitle,
+                            lastPage = savedRecentPage
                         )
                     )
                 }
             }
+        }
+    }
+
+    // 페이지 변경 시 저장
+    LaunchedEffect(currentImageIndex) {
+        if (images.isNotEmpty() && seriesMangaId > 0 && currentImageIndex > 0) {
+            store.saveRecentMangaPage(seriesMangaId, currentId, currentImageIndex)
         }
     }
 

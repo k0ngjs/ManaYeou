@@ -14,7 +14,8 @@ data class RecentManga(
     val thumb: String,
     val referer: String,
     val lastEpisodeId: Int,
-    val lastEpisodeTitle: String
+    val lastEpisodeTitle: String,
+    val lastPage: Int = 0
 )
 
 data class BookmarkedManga(
