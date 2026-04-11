@@ -22,7 +22,6 @@ import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.HomeContent
 import com.fubuki.manarabbit.data.SettingsDataStore
-import com.fubuki.manarabbit.network.AuthRequiredException
 import com.fubuki.manarabbit.network.fetchHomeContent
 import com.fubuki.manarabbit.network.fetchUrlFromTelegram
 import com.fubuki.manarabbit.network.searchManga
@@ -133,13 +132,8 @@ fun MainScreen() {
                 homeLoaded = true
                 scope.launch { store.saveHomeContent(result) }
             }
-        } catch (e: AuthRequiredException) {
-            if (homeLoaded) {
-                showAuthDialog = true
-            } else {
-                homeStatus = "인증이 필요합니다"
-                showAuthDialog = true
-            }
+        } catch (e: Exception) {
+            if (!homeLoaded) homeStatus = "목록을 불러오지 못했습니다"
         }
         homeLoading = false
     }
@@ -355,11 +349,7 @@ fun MainScreen() {
                                 searchLoading = true
                                 searchSearched = true
                                 scope.launch {
-                                    try {
-                                        searchResults = searchManga(baseUrl, query, cfCookies)
-                                    } catch (e: AuthRequiredException) {
-                                        showAuthDialog = true
-                                    }
+                                    searchResults = searchManga(baseUrl, query, cfCookies)
                                     searchLoading = false
                                 }
                             },

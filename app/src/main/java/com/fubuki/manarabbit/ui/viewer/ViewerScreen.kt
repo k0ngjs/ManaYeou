@@ -44,9 +44,7 @@ import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
-import com.fubuki.manarabbit.network.AuthRequiredException
 import com.fubuki.manarabbit.network.fetchViewerData
-
 import com.fubuki.manarabbit.network.httpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -178,10 +176,9 @@ fun ViewerScreen(
                         )
                     }
                 }
-            } catch (e: AuthRequiredException) {
+            } catch (e: Exception) {
                 status = "이미지를 불러오지 못했습니다"
-                loadFailed = true
-                onAuthNeeded()
+                loadFailed = false
             }
             isLoading = false
         }

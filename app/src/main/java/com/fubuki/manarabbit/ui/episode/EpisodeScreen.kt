@@ -26,7 +26,6 @@ import com.fubuki.manarabbit.data.MangaDetail
 import com.fubuki.manarabbit.data.MangaInfo
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
-import com.fubuki.manarabbit.network.AuthRequiredException
 import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
 import kotlinx.coroutines.flow.first
@@ -89,9 +88,8 @@ fun EpisodeScreen(
                     )
                 }
             }
-        } catch (e: AuthRequiredException) {
-            status = "인증이 필요합니다"
-            onAuthNeeded()
+        } catch (e: Exception) {
+            status = "에피소드를 불러오지 못했습니다"
         }
         if (refresh) isRefreshing = false else isLoading = false
     }

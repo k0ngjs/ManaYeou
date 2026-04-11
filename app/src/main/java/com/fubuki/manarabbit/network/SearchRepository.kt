@@ -18,7 +18,7 @@ suspend fun searchManga(baseUrl: String, query: String, cookieStr: String = ""):
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
             val response = httpClient.newCall(request).execute()
-            if (response.code == 403) { response.close(); throw AuthRequiredException() }
+            if (!response.isSuccessful) { response.close(); return@withContext emptyList() }
             val body = response.use { it.body?.string() } ?: return@withContext emptyList()
 
             val doc = Jsoup.parse(body)
@@ -35,8 +35,6 @@ suspend fun searchManga(baseUrl: String, query: String, cookieStr: String = ""):
                 result.add(Manga(seriesId, name, thumb, cleanUrl))
             }
             result
-        } catch (e: AuthRequiredException) {
-            throw e
         } catch (e: Exception) {
             emptyList()
         }

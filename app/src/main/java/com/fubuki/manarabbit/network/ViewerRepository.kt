@@ -32,7 +32,7 @@ suspend fun fetchViewerData(baseUrl: String, episodeId: Int, cookieStr: String =
             .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
             .build()
         val response = httpClient.newCall(request).execute()
-        if (response.code == 403) { response.close(); throw AuthRequiredException() }
+        if (!response.isSuccessful) { response.close(); return@withContext ViewerResult(emptyList(), 0, 0, "", "", 0, "", "") }
         val body = response.use { it.body?.string() }
             ?: return@withContext ViewerResult(emptyList(), 0, 0, "", "", 0, "", "")
 

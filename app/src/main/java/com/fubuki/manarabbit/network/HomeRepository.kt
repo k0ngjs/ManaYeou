@@ -22,7 +22,7 @@ suspend fun fetchHomeContent(baseUrl: String, cookieStr: String = ""): HomeConte
 
             fun executeChecked(url: String): String {
                 val response = httpClient.newCall(buildRequest(url)).execute()
-                if (response.code == 403) { response.close(); throw AuthRequiredException() }
+                if (!response.isSuccessful) { response.close(); return "" }
                 return response.use { it.body?.string() ?: "" }
             }
 
@@ -54,8 +54,6 @@ suspend fun fetchHomeContent(baseUrl: String, cookieStr: String = ""): HomeConte
             }
 
             HomeContent(updated, popular)
-        } catch (e: AuthRequiredException) {
-            throw e
         } catch (e: Exception) {
             HomeContent()
         }
@@ -73,7 +71,7 @@ suspend fun fetchUpdatedMangaList(baseUrl: String, cookieStr: String = ""): List
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
             val response = httpClient.newCall(request).execute()
-            if (response.code == 403) { response.close(); throw AuthRequiredException() }
+            if (!response.isSuccessful) { response.close(); return@withContext emptyList() }
             val body = response.use { it.body?.string() } ?: return@withContext emptyList()
 
             val doc = Jsoup.parse(body)
@@ -85,8 +83,6 @@ suspend fun fetchUpdatedMangaList(baseUrl: String, cookieStr: String = ""): List
                 result.add(Manga(seriesId, name, thumb, cleanUrl))
             }
             result
-        } catch (e: AuthRequiredException) {
-            throw e
         } catch (e: Exception) {
             emptyList()
         }
