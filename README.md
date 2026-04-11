@@ -8,8 +8,6 @@
 
 Kotlin + Jetpack Compose로 만든 Android 만화 뷰어.
 
-## Overview
-
 - **Min SDK** — Android 8.0 (API 26)
 - **Language** — Kotlin
 - **UI** — Jetpack Compose + Material 3
