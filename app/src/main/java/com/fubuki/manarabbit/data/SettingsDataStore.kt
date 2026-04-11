@@ -25,6 +25,8 @@ class SettingsDataStore(private val context: Context) {
         val BOOKMARK_MANGA_KEY = stringPreferencesKey("bookmark_manga")
         val AUTO_RESOLVE_KEY = stringPreferencesKey("auto_resolve")
         val AUTO_RESOLVE_NUMBER_KEY = stringPreferencesKey("auto_resolve_number")
+        val HOME_CONTENT_KEY = stringPreferencesKey("home_content")
+        val EPISODE_CACHE_KEY = stringPreferencesKey("episode_cache")
     }
 
     val baseUrl: Flow<String> = context.dataStore.data.map { prefs ->
@@ -69,6 +71,14 @@ class SettingsDataStore(private val context: Context) {
 
     val autoResolveNumber: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[AUTO_RESOLVE_NUMBER_KEY]?.toIntOrNull() ?: 0
+    }
+
+    val homeContent: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[HOME_CONTENT_KEY] ?: ""
+    }
+
+    val episodeCache: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[EPISODE_CACHE_KEY] ?: ""
     }
 
     suspend fun saveAutoResolve(enabled: Boolean) {
@@ -204,5 +214,38 @@ class SettingsDataStore(private val context: Context) {
 
     fun isBookmarked(mangaId: Int, bookmarkStr: String): Boolean {
         return parseBookmarkList(bookmarkStr).any { it.id == mangaId }
+    }
+
+    // 홈 콘텐츠 캐시 (updated|popular 구분)
+    suspend fun saveHomeContent(content: HomeContent) {
+        val updated = serializeBookmarkList(content.updated)
+        val popular = serializeBookmarkList(content.popular)
+        context.dataStore.edit { prefs -> prefs[HOME_CONTENT_KEY] = "$updated\n$popular" }
+    }
+
+    fun parseHomeContent(str: String): HomeContent {
+        if (str.isEmpty()) return HomeContent()
+        val parts = str.split("\n", limit = 2)
+        val updated = parseBookmarkList(parts.getOrNull(0) ?: "")
+        val popular = parseBookmarkList(parts.getOrNull(1) ?: "").map { it.copy(isEpisode = true) }
+        return HomeContent(updated, popular)
+    }
+
+    // 에피소드 목록 캐시 (mangaId별 최근 1개)
+    suspend fun saveEpisodeCache(mangaId: Int, episodes: List<Episode>) {
+        val serialized = episodes.joinToString("|") { "${it.id}::${it.title}::${it.date}" }
+        context.dataStore.edit { prefs -> prefs[EPISODE_CACHE_KEY] = "$mangaId\n$serialized" }
+    }
+
+    fun parseEpisodeCache(str: String, mangaId: Int): List<Episode> {
+        if (str.isEmpty()) return emptyList()
+        val parts = str.split("\n", limit = 2)
+        if (parts.getOrNull(0)?.toIntOrNull() != mangaId) return emptyList()
+        val episodeStr = parts.getOrNull(1) ?: return emptyList()
+        if (episodeStr.isEmpty()) return emptyList()
+        return episodeStr.split("|").mapNotNull { item ->
+            val p = item.split("::")
+            if (p.size >= 3) Episode(p[0].toIntOrNull() ?: return@mapNotNull null, p[1], p[2]) else null
+        }
     }
 }

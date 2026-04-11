@@ -52,8 +52,14 @@ fun EpisodeScreen(
     val recentMangaStr by store.recentManga.collectAsState(initial = "")
     val recentMangaList = remember(recentMangaStr) { store.parseRecentMangaList(recentMangaStr) }
     val lastEpisodeId = recentMangaList.find { it.mangaId == mangaId }?.lastEpisodeId
-    var mangaDetail by remember { mutableStateOf(cachedDetail) }
-    var isLoading by remember { mutableStateOf(cachedDetail.episodes.isEmpty()) }
+    val episodeCacheStr by store.episodeCache.collectAsState(initial = "")
+    // DataStore 캐시 또는 인메모리 캐시 우선 적용
+    val initialDetail = remember(mangaId) {
+        if (cachedDetail.episodes.isNotEmpty()) cachedDetail
+        else MangaDetail()
+    }
+    var mangaDetail by remember { mutableStateOf(initialDetail) }
+    var isLoading by remember { mutableStateOf(initialDetail.episodes.isEmpty()) }
     var isRefreshing by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
@@ -69,6 +75,8 @@ fun EpisodeScreen(
             } else {
                 mangaDetail = result
                 onDetailLoaded(result)
+                // 에피소드 목록 DataStore에 캐시
+                scope.launch { store.saveEpisodeCache(mangaId, result.episodes) }
                 val existing = store.parseRecentMangaList(store.recentManga.first())
                     .find { it.mangaId == mangaId }
                 if (existing != null) {
@@ -89,8 +97,16 @@ fun EpisodeScreen(
     }
 
     LaunchedEffect(mangaId, baseUrl) {
-        if (baseUrl.isNotEmpty() && cachedDetail.episodes.isEmpty()) {
-            loadDetail()
+        if (baseUrl.isEmpty()) return@LaunchedEffect
+        if (mangaDetail.episodes.isEmpty()) {
+            // DataStore 캐시 확인
+            val cached = store.parseEpisodeCache(episodeCacheStr, mangaId)
+            if (cached.isNotEmpty()) {
+                mangaDetail = mangaDetail.copy(episodes = cached)
+                isLoading = false
+            } else {
+                loadDetail()
+            }
         }
     }
 

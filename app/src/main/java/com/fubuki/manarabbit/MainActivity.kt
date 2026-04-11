@@ -84,9 +84,9 @@ fun MainScreen() {
     var homeContent by remember { mutableStateOf(HomeContent()) }
     var homeLoading by remember { mutableStateOf(true) }
     var homeStatus by remember { mutableStateOf("") }
-    // 최초 로드 성공 여부 — true이면 이후 에러는 Snackbar로만 표시
     var homeLoaded by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val homeContentCache by store.homeContent.collectAsState(initial = "")
 
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<Manga>>(emptyList()) }
@@ -106,7 +106,19 @@ fun MainScreen() {
         bookmarkListData = null
     }
 
-    suspend fun loadHomeContent() {
+    suspend fun loadHomeContent(forceRefresh: Boolean = false) {
+        // 캐시가 있고 강제 새로고침이 아니면 캐시를 즉시 표시하고 백그라운드 갱신 생략
+        if (!forceRefresh && homeLoaded) return
+        if (!forceRefresh) {
+            // 캐시된 홈 콘텐츠가 있으면 즉시 표시
+            val cached = store.parseHomeContent(homeContentCache)
+            if (cached.updated.isNotEmpty()) {
+                homeContent = cached
+                homeLoaded = true
+                homeLoading = false
+                return
+            }
+        }
         if (!homeLoaded) homeLoading = true
         homeStatus = ""
         try {
@@ -120,6 +132,7 @@ fun MainScreen() {
             } else {
                 homeContent = result
                 homeLoaded = true
+                scope.launch { store.saveHomeContent(result) }
             }
         } catch (e: AuthRequiredException) {
             if (homeLoaded) {
@@ -321,7 +334,7 @@ fun MainScreen() {
                             homeContent = homeContent,
                             isLoading = homeLoading,
                             status = homeStatus,
-                            onRefresh = { loadHomeContent() },
+                            onRefresh = { loadHomeContent(forceRefresh = true) },
                             onMangaClick = { manga ->
                                 if (manga.isEpisode) {
                                     selectedEpisode = Triple(manga.id, manga.name, emptyList())
