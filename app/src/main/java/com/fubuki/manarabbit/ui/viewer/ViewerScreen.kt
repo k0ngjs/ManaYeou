@@ -44,6 +44,7 @@ import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
+import com.fubuki.manarabbit.network.AuthRequiredException
 import com.fubuki.manarabbit.network.fetchEpisodeListWithSeriesId
 import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.network.fetchViewerImages
@@ -152,12 +153,18 @@ fun ViewerScreen(
         currentImageIndex = startPage
         savedPage = startPage
         scope.launch {
-            val result = fetchViewerImages(baseUrl, id, cfCookies)
-            if (result.isEmpty()) {
+            try {
+                val result = fetchViewerImages(baseUrl, id, cfCookies)
+                if (result.isEmpty()) {
+                    status = "이미지를 불러오지 못했습니다"
+                    loadFailed = true
+                    onAuthNeeded()
+                } else images = result
+            } catch (e: AuthRequiredException) {
                 status = "이미지를 불러오지 못했습니다"
                 loadFailed = true
                 onAuthNeeded()
-            } else images = result
+            }
             isLoading = false
         }
     }

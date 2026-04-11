@@ -17,8 +17,9 @@ suspend fun fetchViewerImages(baseUrl: String, episodeId: Int, cookieStr: String
                 .header("Referer", cleanUrl)
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
-            val body = httpClient.newCall(request).execute().use { it.body?.string() }
-                ?: return@withContext emptyList()
+            val response = httpClient.newCall(request).execute()
+            if (response.code == 403) { response.close(); throw AuthRequiredException() }
+            val body = response.use { it.body?.string() } ?: return@withContext emptyList()
 
             val doc = Jsoup.parse(body)
             val result = mutableListOf<String>()
@@ -68,6 +69,8 @@ suspend fun fetchViewerImages(baseUrl: String, episodeId: Int, cookieStr: String
                 if (url.isNotEmpty()) result.add(url)
             }
             result
+        } catch (e: AuthRequiredException) {
+            throw e
         } catch (e: Exception) {
             emptyList()
         }
@@ -84,8 +87,9 @@ suspend fun fetchEpisodeListWithSeriesId(baseUrl: String, episodeId: Int, cookie
                 .header("Referer", cleanUrl)
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
-            val body = httpClient.newCall(request).execute().use { it.body?.string() }
-                ?: return@withContext Pair(emptyList(), 0)
+            val response = httpClient.newCall(request).execute()
+            if (response.code == 403) { response.close(); throw AuthRequiredException() }
+            val body = response.use { it.body?.string() } ?: return@withContext Pair(emptyList(), 0)
 
             val doc = Jsoup.parse(body)
             val navbar = doc.selectFirst("div.toon-nav") ?: return@withContext Pair(emptyList(), 0)
@@ -96,6 +100,8 @@ suspend fun fetchEpisodeListWithSeriesId(baseUrl: String, episodeId: Int, cookie
 
             val episodes = fetchEpisodeList(cleanUrl, seriesId, cookieStr)
             Pair(episodes, seriesId)
+        } catch (e: AuthRequiredException) {
+            throw e
         } catch (e: Exception) {
             Pair(emptyList(), 0)
         }

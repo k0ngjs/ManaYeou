@@ -23,6 +23,7 @@ import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.HomeContent
 import com.fubuki.manarabbit.data.SettingsDataStore
+import com.fubuki.manarabbit.network.AuthRequiredException
 import com.fubuki.manarabbit.network.fetchHomeContent
 import com.fubuki.manarabbit.network.fetchUrlFromTelegram
 import com.fubuki.manarabbit.network.searchManga
@@ -105,12 +106,16 @@ fun MainScreen() {
     suspend fun loadHomeContent() {
         homeLoading = true
         homeStatus = ""
-        val result = fetchHomeContent(baseUrl, cfCookies)
-        if (result.updated.isEmpty() && result.popular.isEmpty()) {
-            homeStatus = "목록을 불러오지 못했습니다"
-            if (cfCookies.isEmpty()) showAuthDialog = true
-        } else {
-            homeContent = result
+        try {
+            val result = fetchHomeContent(baseUrl, cfCookies)
+            if (result.updated.isEmpty() && result.popular.isEmpty()) {
+                homeStatus = "목록을 불러오지 못했습니다"
+            } else {
+                homeContent = result
+            }
+        } catch (e: AuthRequiredException) {
+            homeStatus = "인증이 필요합니다"
+            showAuthDialog = true
         }
         homeLoading = false
     }
@@ -326,7 +331,11 @@ fun MainScreen() {
                                 searchLoading = true
                                 searchSearched = true
                                 scope.launch {
-                                    searchResults = searchManga(baseUrl, query, cfCookies)
+                                    try {
+                                        searchResults = searchManga(baseUrl, query, cfCookies)
+                                    } catch (e: AuthRequiredException) {
+                                        showAuthDialog = true
+                                    }
                                     searchLoading = false
                                 }
                             },

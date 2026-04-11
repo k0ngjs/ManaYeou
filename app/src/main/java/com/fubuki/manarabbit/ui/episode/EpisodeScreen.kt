@@ -26,6 +26,7 @@ import com.fubuki.manarabbit.data.MangaDetail
 import com.fubuki.manarabbit.data.MangaInfo
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
+import com.fubuki.manarabbit.network.AuthRequiredException
 import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
 import kotlinx.coroutines.flow.first
@@ -61,24 +62,28 @@ fun EpisodeScreen(
     suspend fun loadDetail(refresh: Boolean = false) {
         if (refresh) isRefreshing = true else isLoading = true
         status = ""
-        val result = fetchMangaDetail(baseUrl, mangaId, cfCookies)
-        if (result.episodes.isEmpty()) {
-            status = "에피소드를 불러오지 못했습니다"
-            onAuthNeeded()
-        } else {
-            mangaDetail = result
-            onDetailLoaded(result)
-            val existing = store.parseRecentMangaList(store.recentManga.first())
-                .find { it.mangaId == mangaId }
-            if (existing != null) {
-                store.saveRecentManga(
-                    existing.copy(
-                        mangaName = result.info.name,
-                        thumb = result.info.thumb,
-                        referer = baseUrl
+        try {
+            val result = fetchMangaDetail(baseUrl, mangaId, cfCookies)
+            if (result.episodes.isEmpty()) {
+                status = "에피소드를 불러오지 못했습니다"
+            } else {
+                mangaDetail = result
+                onDetailLoaded(result)
+                val existing = store.parseRecentMangaList(store.recentManga.first())
+                    .find { it.mangaId == mangaId }
+                if (existing != null) {
+                    store.saveRecentManga(
+                        existing.copy(
+                            mangaName = result.info.name,
+                            thumb = result.info.thumb,
+                            referer = baseUrl
+                        )
                     )
-                )
+                }
             }
+        } catch (e: AuthRequiredException) {
+            status = "인증이 필요합니다"
+            onAuthNeeded()
         }
         if (refresh) isRefreshing = false else isLoading = false
     }

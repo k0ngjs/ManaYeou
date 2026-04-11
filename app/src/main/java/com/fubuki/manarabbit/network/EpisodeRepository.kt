@@ -22,8 +22,9 @@ suspend fun fetchMangaDetail(
                 .header("Referer", cleanUrl)
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
-            val body = httpClient.newCall(request).execute().use { it.body?.string() }
-                ?: return@withContext MangaDetail()
+            val response = httpClient.newCall(request).execute()
+            if (response.code == 403) { response.close(); throw AuthRequiredException() }
+            val body = response.use { it.body?.string() } ?: return@withContext MangaDetail()
 
             val doc = Jsoup.parse(body)
             val header = doc.selectFirst("div.view-title")
@@ -58,6 +59,8 @@ suspend fun fetchMangaDetail(
             }
 
             MangaDetail(info, episodes)
+        } catch (e: AuthRequiredException) {
+            throw e
         } catch (e: Exception) {
             MangaDetail()
         }

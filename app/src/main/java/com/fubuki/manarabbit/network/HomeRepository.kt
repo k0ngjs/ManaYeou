@@ -20,14 +20,14 @@ suspend fun fetchHomeContent(baseUrl: String, cookieStr: String = ""): HomeConte
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
 
-            val updateDeferred = async {
-                httpClient.newCall(buildRequest("$cleanUrl/page/update")).execute()
-                    .use { it.body?.string() ?: "" }
+            fun executeChecked(url: String): String {
+                val response = httpClient.newCall(buildRequest(url)).execute()
+                if (response.code == 403) { response.close(); throw AuthRequiredException() }
+                return response.use { it.body?.string() ?: "" }
             }
-            val mainDeferred = async {
-                httpClient.newCall(buildRequest(cleanUrl)).execute()
-                    .use { it.body?.string() ?: "" }
-            }
+
+            val updateDeferred = async { executeChecked("$cleanUrl/page/update") }
+            val mainDeferred = async { executeChecked(cleanUrl) }
 
             val updateDoc = Jsoup.parse(updateDeferred.await())
             val updated = mutableListOf<Manga>()
@@ -54,6 +54,8 @@ suspend fun fetchHomeContent(baseUrl: String, cookieStr: String = ""): HomeConte
             }
 
             HomeContent(updated, popular)
+        } catch (e: AuthRequiredException) {
+            throw e
         } catch (e: Exception) {
             HomeContent()
         }
@@ -70,8 +72,9 @@ suspend fun fetchUpdatedMangaList(baseUrl: String, cookieStr: String = ""): List
                 .header("Referer", cleanUrl)
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
-            val body = httpClient.newCall(request).execute().use { it.body?.string() }
-                ?: return@withContext emptyList()
+            val response = httpClient.newCall(request).execute()
+            if (response.code == 403) { response.close(); throw AuthRequiredException() }
+            val body = response.use { it.body?.string() } ?: return@withContext emptyList()
 
             val doc = Jsoup.parse(body)
             val result = mutableListOf<Manga>()
@@ -82,6 +85,8 @@ suspend fun fetchUpdatedMangaList(baseUrl: String, cookieStr: String = ""): List
                 result.add(Manga(seriesId, name, thumb, cleanUrl))
             }
             result
+        } catch (e: AuthRequiredException) {
+            throw e
         } catch (e: Exception) {
             emptyList()
         }
