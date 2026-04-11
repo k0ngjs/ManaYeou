@@ -8,27 +8,16 @@
 
 Kotlin + Jetpack Compose로 만든 Android 만화 뷰어.
 
-- **Min SDK** — Android 8.0 (API 26)
-- **Language** — Kotlin
-- **UI** — Jetpack Compose + Material 3
+[![MinSDK](https://img.shields.io/badge/Min_SDK-Android_8.0_(API_26)-informational?style=flat&logo=android&logoColor=white)](https://github.com/k0ngjs/ManaYeou)
+[![Language](https://img.shields.io/badge/Language-Kotlin-7F52FF?style=flat&logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![UI](https://img.shields.io/badge/UI-Jetpack_Compose_+_Material_3-4285F4?style=flat&logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
 
 ## Features
 
-**서버 연결**
-- 텔레그램 공지에서 최신 서버 주소 자동 탐색
+- 텔레그램에서 최신 서버 주소 자동 탐색 및 수동 입력 지원
 - Cloudflare CAPTCHA 인증 지원
-- 수동 주소 입력 지원
-
-**뷰어**
-- 스크롤 / 페이지 두 가지 보기 모드
-- 페이지 방향 설정 (좌→우 / 우→좌)
-- 2페이지 보기 모드
+- 스크롤 / 페이지 보기 모드, 페이지 방향 설정, 2페이지 보기
 - 마지막으로 본 페이지 자동 복원
-
-**라이브러리**
-- 북마크 저장 및 관리
-- 최근 본 만화 목록 (최대 20개)
+- 북마크 및 최근 본 만화 목록 관리
 - 데이터 백업 · 가져오기 (`.yeou`, TSV 형식 지원)
-
-**기타**
 - 라이트 / 다크 / 시스템 테마
