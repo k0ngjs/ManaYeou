@@ -126,6 +126,7 @@ fun MainScreen() {
                     scope.launch { snackbarHostState.showSnackbar("목록을 불러오지 못했습니다") }
                 } else {
                     homeStatus = "목록을 불러오지 못했습니다"
+                    showAuthDialog = true
                 }
             } else {
                 homeContent = result
@@ -133,7 +134,10 @@ fun MainScreen() {
                 scope.launch { store.saveHomeContent(result) }
             }
         } catch (e: Exception) {
-            if (!homeLoaded) homeStatus = "목록을 불러오지 못했습니다"
+            if (!homeLoaded) {
+                homeStatus = "목록을 불러오지 못했습니다"
+                showAuthDialog = true
+            }
         }
         homeLoading = false
     }

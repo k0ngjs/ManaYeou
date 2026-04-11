@@ -71,6 +71,7 @@ fun EpisodeScreen(
             val result = fetchMangaDetail(baseUrl, mangaId, cfCookies)
             if (result.episodes.isEmpty()) {
                 status = "에피소드를 불러오지 못했습니다"
+                onAuthNeeded()
             } else {
                 mangaDetail = result
                 onDetailLoaded(result)

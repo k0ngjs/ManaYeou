@@ -158,6 +158,7 @@ fun ViewerScreen(
                     loadFailed = true
                     onAuthNeeded()
                 } else {
+
                     images = result.images
                     prevId = result.prevId
                     nextId = result.nextId
@@ -178,7 +179,8 @@ fun ViewerScreen(
                 }
             } catch (e: Exception) {
                 status = "이미지를 불러오지 못했습니다"
-                loadFailed = false
+                loadFailed = true
+                onAuthNeeded()
             }
             isLoading = false
         }
