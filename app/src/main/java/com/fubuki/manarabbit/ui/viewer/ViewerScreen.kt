@@ -360,7 +360,6 @@ fun ViewerScreen(
                         Icon(Icons.Filled.Settings, "설정", tint = Color.White)
                     }
                 },
-                windowInsets = WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Black.copy(alpha = 0.7f),
                     titleContentColor = Color.White,

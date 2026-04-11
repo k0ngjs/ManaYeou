@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +39,7 @@ fun BookmarkListScreen(
     cachedItems: List<BookmarkedManga> = emptyList(),
     onItemsLoaded: (List<BookmarkedManga>) -> Unit = {},
     onMangaClick: (Manga) -> Unit,
+    onDeleteItems: (List<Manga>) -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -47,7 +51,8 @@ fun BookmarkListScreen(
     var bookmarkItems by remember { mutableStateOf<List<BookmarkedManga>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
-
+    var editMode by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<Int>()) }
 
     suspend fun loadBookmarks(refresh: Boolean = false) {
         if (refresh) isRefreshing = true else isLoading = true
@@ -56,7 +61,6 @@ fun BookmarkListScreen(
                 async(Dispatchers.IO) {
                     try {
                         if (manga.thumb.isEmpty()) {
-                            // thumb 없는 항목은 detail로 thumb + 최신화 동시 획득
                             val detail = fetchMangaDetail(baseUrl, manga.id, cfCookies)
                             val latest = detail.episodes.firstOrNull()
                             val updatedManga = manga.copy(
@@ -108,8 +112,43 @@ fun BookmarkListScreen(
             TopAppBar(
                 title = { Text("북마크") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (editMode) {
+                            editMode = false
+                            selected = emptySet()
+                        } else {
+                            onBack()
+                        }
+                    }) {
                         Icon(Icons.Filled.ArrowBack, "뒤로")
+                    }
+                },
+                actions = {
+                    if (editMode) {
+                        IconButton(
+                            onClick = {
+                                val toDelete = bookmarkItems
+                                    .filter { it.manga.id in selected }
+                                    .map { it.manga }
+                                bookmarkItems = bookmarkItems.filter { it.manga.id !in selected }
+                                onDeleteItems(toDelete)
+                                selected = emptySet()
+                                editMode = false
+                            },
+                            enabled = selected.isNotEmpty()
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete, "삭제",
+                                tint = if (selected.isNotEmpty())
+                                    MaterialTheme.colorScheme.error
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        TextButton(onClick = { editMode = true }) {
+                            Text("편집")
+                        }
                     }
                 },
                 windowInsets = WindowInsets(0),
@@ -139,14 +178,34 @@ fun BookmarkListScreen(
                 modifier = Modifier.fillMaxSize().padding(padding)
             ) {
                 LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
-                    items(bookmarkItems) { item ->
+                    items(bookmarkItems, key = { it.manga.id }) { item ->
+                        val isSelected = item.manga.id in selected
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onMangaClick(item.manga) }
+                                .clickable {
+                                    if (editMode) {
+                                        selected = if (isSelected)
+                                            selected - item.manga.id
+                                        else
+                                            selected + item.manga.id
+                                    } else {
+                                        onMangaClick(item.manga)
+                                    }
+                                }
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            if (editMode) {
+                                Icon(
+                                    imageVector = if (isSelected) Icons.Outlined.CheckBox
+                                                  else Icons.Outlined.CheckBoxOutlineBlank,
+                                    contentDescription = null,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                            }
                             Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)

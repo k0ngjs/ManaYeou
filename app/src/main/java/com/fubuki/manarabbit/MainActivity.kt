@@ -286,6 +286,12 @@ fun MainScreen() {
                     cachedItems = cachedBookmarkItems,
                     onItemsLoaded = { cachedBookmarkItems = it },
                     onMangaClick = { manga -> selectedManga = manga },
+                    onDeleteItems = { toDelete ->
+                        val updated = bookmarkListData!!.filter { it !in toDelete }
+                        scope.launch { store.saveBookmarkList(updated) }
+                        bookmarkListData = updated
+                        cachedBookmarkItems = cachedBookmarkItems.filter { it.manga !in toDelete }
+                    },
                     onBack = { bookmarkListData = null }
                 )
                 else -> Box(
