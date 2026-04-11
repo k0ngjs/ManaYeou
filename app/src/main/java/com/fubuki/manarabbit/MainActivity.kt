@@ -84,6 +84,9 @@ fun MainScreen() {
     var homeContent by remember { mutableStateOf(HomeContent()) }
     var homeLoading by remember { mutableStateOf(true) }
     var homeStatus by remember { mutableStateOf("") }
+    // 최초 로드 성공 여부 — true이면 이후 에러는 Snackbar로만 표시
+    var homeLoaded by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<Manga>>(emptyList()) }
@@ -104,18 +107,27 @@ fun MainScreen() {
     }
 
     suspend fun loadHomeContent() {
-        homeLoading = true
+        if (!homeLoaded) homeLoading = true
         homeStatus = ""
         try {
             val result = fetchHomeContent(baseUrl, cfCookies)
             if (result.updated.isEmpty() && result.popular.isEmpty()) {
-                homeStatus = "목록을 불러오지 못했습니다"
+                if (homeLoaded) {
+                    scope.launch { snackbarHostState.showSnackbar("목록을 불러오지 못했습니다") }
+                } else {
+                    homeStatus = "목록을 불러오지 못했습니다"
+                }
             } else {
                 homeContent = result
+                homeLoaded = true
             }
         } catch (e: AuthRequiredException) {
-            homeStatus = "인증이 필요합니다"
-            showAuthDialog = true
+            if (homeLoaded) {
+                showAuthDialog = true
+            } else {
+                homeStatus = "인증이 필요합니다"
+                showAuthDialog = true
+            }
         }
         homeLoading = false
     }
@@ -222,6 +234,7 @@ fun MainScreen() {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface
