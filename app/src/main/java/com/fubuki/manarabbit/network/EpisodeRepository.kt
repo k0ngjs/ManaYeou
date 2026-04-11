@@ -23,7 +23,7 @@ suspend fun fetchMangaDetail(
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
             val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) { response.close(); return@withContext MangaDetail() }
+            if (!response.isSuccessful) { response.close(); throw Exception("HTTP ${response.code}") }
             val body = response.use { it.body?.string() } ?: return@withContext MangaDetail()
 
             val doc = Jsoup.parse(body)

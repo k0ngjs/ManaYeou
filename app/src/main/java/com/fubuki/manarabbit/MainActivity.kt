@@ -353,7 +353,11 @@ fun MainScreen() {
                                 searchLoading = true
                                 searchSearched = true
                                 scope.launch {
-                                    searchResults = searchManga(baseUrl, query, cfCookies)
+                                    try {
+                                        searchResults = searchManga(baseUrl, query, cfCookies)
+                                    } catch (e: Exception) {
+                                        showAuthDialog = true
+                                    }
                                     searchLoading = false
                                 }
                             },

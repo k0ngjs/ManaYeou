@@ -22,7 +22,7 @@ suspend fun fetchHomeContent(baseUrl: String, cookieStr: String = ""): HomeConte
 
             fun executeChecked(url: String): String {
                 val response = httpClient.newCall(buildRequest(url)).execute()
-                if (!response.isSuccessful) { response.close(); return "" }
+                if (!response.isSuccessful) { response.close(); throw Exception("HTTP ${response.code}") }
                 return response.use { it.body?.string() ?: "" }
             }
 
@@ -71,7 +71,7 @@ suspend fun fetchUpdatedMangaList(baseUrl: String, cookieStr: String = ""): List
                 .apply { if (cookieStr.isNotEmpty()) header("Cookie", cookieStr) }
                 .build()
             val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) { response.close(); return@withContext emptyList() }
+            if (!response.isSuccessful) { response.close(); throw Exception("HTTP ${response.code}") }
             val body = response.use { it.body?.string() } ?: return@withContext emptyList()
 
             val doc = Jsoup.parse(body)
