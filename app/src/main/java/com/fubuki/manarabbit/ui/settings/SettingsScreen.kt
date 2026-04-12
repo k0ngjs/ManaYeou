@@ -41,7 +41,6 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
     val autoResolve by store.autoResolve.collectAsState(initial = false)
     var showImportSuccess by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
-    var showCacheClearedSnackbar by remember { mutableStateOf(false) }
     var urlInput by remember(savedUrl) { mutableStateOf(savedUrl) }
 
     val cfCookies by store.cfCookies.collectAsState(initial = "")
@@ -191,12 +190,24 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
 
             Text("CAPTCHA", style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary)
-            Button(
-                onClick = onCfAuthClick,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                enabled = savedUrl.isNotEmpty()
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("인증")
+                Button(
+                    onClick = onCfAuthClick,
+                    modifier = Modifier.weight(1f),
+                    enabled = savedUrl.isNotEmpty()
+                ) {
+                    Text("인증")
+                }
+                OutlinedButton(
+                    onClick = { scope.launch { store.clearCfCookies() } },
+                    modifier = Modifier.weight(1f),
+                    enabled = cfCookies.isNotEmpty()
+                ) {
+                    Text("초기화")
+                }
             }
             if (savedUrl.isEmpty()) {
                 Text(
@@ -222,38 +233,6 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                             selectedLabelColor = androidx.compose.ui.graphics.Color.Black
                         )
                     )
-                }
-            }
-
-            // 캐시
-            HorizontalDivider()
-
-            Text("캐시", style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary)
-            Text(
-                "홈 화면 및 에피소드 목록 캐시를 삭제합니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        store.clearCache()
-                        showCacheClearedSnackbar = true
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("캐시 삭제")
-            }
-
-            if (showCacheClearedSnackbar) {
-                LaunchedEffect(Unit) {
-                    kotlinx.coroutines.delay(2000)
-                    showCacheClearedSnackbar = false
-                }
-                Snackbar(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text("캐시가 삭제됐어요.")
                 }
             }
 

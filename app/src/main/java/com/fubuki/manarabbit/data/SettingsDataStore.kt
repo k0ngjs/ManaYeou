@@ -98,6 +98,10 @@ class SettingsDataStore(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[CF_COOKIES_KEY] = cookieStr }
     }
 
+    suspend fun clearCfCookies() {
+        context.dataStore.edit { prefs -> prefs.remove(CF_COOKIES_KEY) }
+    }
+
     suspend fun saveTheme(theme: String) {
         context.dataStore.edit { prefs -> prefs[THEME_KEY] = theme }
     }
