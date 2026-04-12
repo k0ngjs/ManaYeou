@@ -112,9 +112,13 @@ fun CloudflareScreen(
                                     document.querySelectorAll('[class*="id_bbn"]')
                                         .forEach(function(el) { el.style.display='none'; });
                                 """.trimIndent(), null)
-                                val cookies = CookieManager.getInstance().getCookie(resUrl) ?: ""
-                                if (cookies.contains("cf_clearance")) {
-                                    finish()
+                                // 첫 번째 로드(initialLoadDone=false)는 무시 — 기존 쿠키로 즉시 닫히는 문제 방지
+                                // CF 챌린지 통과 후 리다이렉트된 두 번째 로드부터 감지
+                                if (initialLoadDone) {
+                                    val cookies = CookieManager.getInstance().getCookie(resUrl) ?: ""
+                                    if (cookies.contains("cf_clearance")) {
+                                        finish()
+                                    }
                                 }
                                 initialLoadDone = true
                                 super.onPageFinished(view, resUrl)
