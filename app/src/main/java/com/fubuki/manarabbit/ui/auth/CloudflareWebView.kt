@@ -15,13 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.fubuki.manarabbit.network.USER_AGENT
 
 /**
- * Cloudflare 챌린지 전용 WebView.
- * Bootstrap/jQuery 리소스가 로드되면 챌린지 통과로 판단하고 자동으로 닫힘.
+ * Cloudflare 챌린지 전용 전체화면 WebView.
+ * Dialog 없이 직접 전체화면으로 렌더링 (ViewerScreen과 동일한 방식).
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -30,7 +28,6 @@ fun CloudflareScreen(
     onCookieReceived: (Map<String, String>) -> Unit,
     onBack: () -> Unit
 ) {
-    var statusText by remember { mutableStateOf("클라우드플레어 인증을 완료해주세요") }
     var completed by remember { mutableStateOf(false) }
 
     fun finish() {
@@ -46,89 +43,79 @@ fun CloudflareScreen(
         }
     }
 
-    Dialog(
-        onDismissRequest = onBack,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false
-        )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, "닫기")
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBack, "닫기")
+                }
+                Text(
+                    text = "클라우드플레어 인증을 완료해주세요",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { finish() }) { Text("완료") }
+            }
+        }
+        HorizontalDivider()
+
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                WebView(context).apply {
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.userAgentString = USER_AGENT
+
+                    webViewClient = object : WebViewClient() {
+                        // 페이지 로드 횟수 추적
+                        // 첫 번째 로드는 무시 (CF 챌린지 페이지 또는 기존 쿠키로 통과한 페이지)
+                        // 두 번째 로드(CF 챌린지 통과 후 리다이렉트)부터 자동 완료 감지
+                        private var pageLoadCount = 0
+
+                        override fun shouldInterceptRequest(
+                            view: WebView,
+                            request: WebResourceRequest
+                        ): WebResourceResponse? {
+                            // WebView 실제 UA를 OkHttp와 동기화
+                            request.requestHeaders["User-Agent"]?.takeIf { it.isNotEmpty() }
+                                ?.let { USER_AGENT = it }
+                            return super.shouldInterceptRequest(view, request)
+                        }
+
+                        override fun onPageFinished(view: WebView, resUrl: String) {
+                            // 광고 제거
+                            view.evaluateJavascript(
+                                """document.querySelectorAll('[class*="id_bbn"]')
+                                    .forEach(function(el) { el.style.display='none'; });""",
+                                null
+                            )
+                            pageLoadCount++
+                            if (pageLoadCount >= 2) {
+                                val cookies = CookieManager.getInstance().getCookie(resUrl) ?: ""
+                                if (cookies.contains("cf_clearance")) {
+                                    finish()
+                                }
+                            }
+                            super.onPageFinished(view, resUrl)
+                        }
                     }
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = { finish() }) { Text("완료") }
+                    loadUrl(url.trimEnd('/') + "/comic")
                 }
             }
-            HorizontalDivider()
-
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    WebView(context).apply {
-                        CookieManager.getInstance().setAcceptCookie(true)
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.userAgentString = USER_AGENT
-
-                        webViewClient = object : WebViewClient() {
-                            // 첫 번째 onPageFinished 이후에만 빠른 감지 활성화
-                            // (기존 cf_clearance 쿠키로 인한 즉시 닫힘 방지)
-                            private var initialLoadDone = false
-
-                            override fun shouldInterceptRequest(
-                                view: WebView,
-                                request: WebResourceRequest
-                            ): WebResourceResponse? {
-                                // WebView 실제 UA를 OkHttp와 동기화
-                                request.requestHeaders["User-Agent"]?.takeIf { it.isNotEmpty() }
-                                    ?.let { USER_AGENT = it }
-                                // 첫 페이지 로드 완료 후에만 빠른 감지 활성화
-                                if (initialLoadDone) {
-                                    val cookies = CookieManager.getInstance().getCookie(request.url.toString()) ?: ""
-                                    if (cookies.contains("cf_clearance")) {
-                                        view.post { finish() }
-                                    }
-                                }
-                                return super.shouldInterceptRequest(view, request)
-                            }
-
-                            override fun onPageFinished(view: WebView, resUrl: String) {
-                                // 광고 제거
-                                view.evaluateJavascript("""
-                                    document.querySelectorAll('[class*="id_bbn"]')
-                                        .forEach(function(el) { el.style.display='none'; });
-                                """.trimIndent(), null)
-                                // 첫 번째 로드(initialLoadDone=false)는 무시 — 기존 쿠키로 즉시 닫히는 문제 방지
-                                // CF 챌린지 통과 후 리다이렉트된 두 번째 로드부터 감지
-                                if (initialLoadDone) {
-                                    val cookies = CookieManager.getInstance().getCookie(resUrl) ?: ""
-                                    if (cookies.contains("cf_clearance")) {
-                                        finish()
-                                    }
-                                }
-                                initialLoadDone = true
-                                super.onPageFinished(view, resUrl)
-                            }
-                        }
-                        // 만화 목록 페이지로 바로 진입 → CF 챌린지가 더 잘 발동됨
-                        loadUrl(url.trimEnd('/') + "/comic")
-                    }
-                }
-            )
-        }
+        )
     }
 }
