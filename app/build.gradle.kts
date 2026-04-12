@@ -50,6 +50,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            if (variant.buildType.name == "release") {
+                output.outputFileName = "ManaYeou-v${variant.versionName}.apk"
+            }
+        }
+    }
 }
 
 dependencies {
