@@ -248,4 +248,11 @@ class SettingsDataStore(private val context: Context) {
             if (p.size >= 3) Episode(p[0].toIntOrNull() ?: return@mapNotNull null, p[1], p[2]) else null
         }
     }
+
+    suspend fun clearCache() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(HOME_CONTENT_KEY)
+            prefs.remove(EPISODE_CACHE_KEY)
+        }
+    }
 }
