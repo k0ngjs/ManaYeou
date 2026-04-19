@@ -91,6 +91,8 @@ fun ViewerScreen(
     var currentImageIndex by remember { mutableIntStateOf(0) }
     var prevId by remember { mutableIntStateOf(0) }
     var nextId by remember { mutableIntStateOf(0) }
+    var prevTitle by remember { mutableStateOf("") }
+    var nextTitle by remember { mutableStateOf("") }
     var seriesMangaId by remember { mutableIntStateOf(0) }
     var savedPage by remember { mutableIntStateOf(0) }
 
@@ -149,6 +151,8 @@ fun ViewerScreen(
         savedPage = startPage
         prevId = 0
         nextId = 0
+        prevTitle = ""
+        nextTitle = ""
         scope.launch {
             try {
                 // fetchViewerData: /comic/{id} 1번만 요청
@@ -162,6 +166,8 @@ fun ViewerScreen(
                     images = result.images
                     prevId = result.prevId
                     nextId = result.nextId
+                    prevTitle = result.prevTitle
+                    nextTitle = result.nextTitle
                     if (result.seriesId > 0) {
                         seriesMangaId = result.seriesId
                         store.saveRecentManga(
@@ -404,7 +410,7 @@ fun ViewerScreen(
                     }
                     Row {
                         IconButton(
-                            onClick = { if (hasPrev) loadEpisode(prevId, "") },
+                            onClick = { if (hasPrev) loadEpisode(prevId, prevTitle) },
                             enabled = hasPrev
                         ) { Icon(Icons.Filled.ArrowBack, "이전화", tint = Color.White) }
                         IconButton(onClick = {
@@ -412,7 +418,7 @@ fun ViewerScreen(
                             else onBack()
                         }) { Icon(Icons.Filled.List, "목록", tint = Color.White) }
                         IconButton(
-                            onClick = { if (hasNext) loadEpisode(nextId, "") },
+                            onClick = { if (hasNext) loadEpisode(nextId, nextTitle) },
                             enabled = hasNext
                         ) { Icon(Icons.Filled.ArrowForward, "다음화", tint = Color.White) }
                     }
