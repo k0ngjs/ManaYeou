@@ -10,8 +10,7 @@ data class ViewerResult(
     val images: List<String>,
     val prevId: Int,   // 이전화 episode ID (없으면 0)
     val nextId: Int,   // 다음화 episode ID (없으면 0)
-    val prevTitle: String,
-    val nextTitle: String,
+    val episodeTitle: String, // 현재 에피소드 제목 (og:title에서 파싱)
     val seriesId: Int,
     val mangaName: String,
     val thumb: String
@@ -34,7 +33,7 @@ suspend fun fetchViewerData(baseUrl: String, episodeId: Int, cookieStr: String =
         val response = httpClient.newCall(request).execute()
         if (!response.isSuccessful) { response.close(); throw Exception("HTTP ${response.code}") }
         val body = response.use { it.body?.string() }
-            ?: return@withContext ViewerResult(emptyList(), 0, 0, "", "", 0, "", "")
+            ?: return@withContext ViewerResult(emptyList(), 0, 0, "", 0, "", "")
 
         val doc = Jsoup.parse(body)
 
@@ -49,44 +48,25 @@ suspend fun fetchViewerData(baseUrl: String, episodeId: Int, cookieStr: String =
             ?.split("?")?.firstOrNull()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
         val nextId = nextHref.split("comic/").getOrNull(1)
             ?.split("?")?.firstOrNull()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
-        val prevTitle = run {
-            val a = nav?.selectFirst("a#goPrevBtn") ?: return@run ""
-            a.attr("title").ifEmpty {
-                a.ownText().trim().ifEmpty {
-                    a.select("b, span.title, span.subject, .toon-title").firstOrNull()?.text()?.trim().orEmpty().ifEmpty {
-                        a.text().trim()
-                    }
-                }
-            }
-        }
-        val nextTitle = run {
-            val a = nav?.selectFirst("a#goNextBtn") ?: return@run ""
-            a.attr("title").ifEmpty {
-                a.ownText().trim().ifEmpty {
-                    a.select("b, span.title, span.subject, .toon-title").firstOrNull()?.text()?.trim().orEmpty().ifEmpty {
-                        a.text().trim()
-                    }
-                }
-            }
-        }
-
         // 목록 링크(last)에서 seriesId 파싱
         val seriesId = nav?.select("a")?.last()
             ?.attr("href")?.split("comic/")?.getOrNull(1)
             ?.split("?")?.firstOrNull()
             ?.filter { it.isDigit() }?.toIntOrNull() ?: 0
 
-        // 만화 이름 + 썸네일은 페이지 내 meta/header에서 파싱
-        val mangaName = doc.selectFirst("meta[property=og:title]")?.attr("content")
-            ?: doc.selectFirst("div.toon-title h1")?.text() ?: ""
+        // 만화 이름 + 에피소드 제목 + 썸네일 파싱
+        // og:title 형식: "에피소드 제목 | 사이트명" 또는 "만화 - 에피소드 | 사이트명"
+        val ogTitle = doc.selectFirst("meta[property=og:title]")?.attr("content") ?: ""
+        val episodeTitle = ogTitle.split("|").firstOrNull()?.trim() ?: ogTitle
+        val mangaName = doc.selectFirst("div.toon-title h1")?.text()
+            ?: episodeTitle.split("-").firstOrNull()?.trim() ?: episodeTitle
         val thumb = doc.selectFirst("meta[property=og:image]")?.attr("content") ?: ""
 
         ViewerResult(
             images = images,
             prevId = prevId,
             nextId = nextId,
-            prevTitle = prevTitle,
-            nextTitle = nextTitle,
+            episodeTitle = episodeTitle,
             seriesId = seriesId,
             mangaName = mangaName,
             thumb = thumb
