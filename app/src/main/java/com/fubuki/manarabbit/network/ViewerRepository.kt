@@ -54,12 +54,10 @@ suspend fun fetchViewerData(baseUrl: String, episodeId: Int, cookieStr: String =
             ?.split("?")?.firstOrNull()
             ?.filter { it.isDigit() }?.toIntOrNull() ?: 0
 
-        // 만화 이름 + 에피소드 제목 + 썸네일 파싱
-        // og:title 형식: "에피소드 제목 | 사이트명" 또는 "만화 - 에피소드 | 사이트명"
-        val ogTitle = doc.selectFirst("meta[property=og:title]")?.attr("content") ?: ""
-        val episodeTitle = ogTitle.split("|").firstOrNull()?.trim() ?: ogTitle
-        val mangaName = doc.selectFirst("div.toon-title h1")?.text()
-            ?: episodeTitle.split("-").firstOrNull()?.trim() ?: episodeTitle
+        // 에피소드 제목: div.toon-title의 title 속성
+        val episodeTitle = doc.selectFirst("div.toon-title")?.attr("title")?.trim()
+            ?: doc.selectFirst("div.toon-title")?.ownText()?.trim() ?: ""
+        val mangaName = episodeTitle
         val thumb = doc.selectFirst("meta[property=og:image]")?.attr("content") ?: ""
 
         ViewerResult(
