@@ -53,8 +53,9 @@ fun BookmarkListScreen(
     var editMode by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<Int>()) }
 
-    suspend fun loadBookmarks(refresh: Boolean = false) {
-        if (refresh) isRefreshing = true else isLoading = true
+    val bookmarkDetailCache by store.bookmarkDetail.collectAsState(initial = "")
+
+    suspend fun fetchAndSave() {
         // 한 번에 3개씩 순차 처리하여 서버 과부하 방지
         val result = mutableListOf<BookmarkedManga>()
         for (chunk in items.chunked(3)) {
@@ -92,25 +93,32 @@ fun BookmarkListScreen(
                 }
                 result.add(item)
             }
-            // 청크 사이 300ms 대기
             if (chunk.size == 3) delay(300)
         }
         val sorted = result.sortedByDescending { it.latestEpisodeId }
         bookmarkItems = sorted
         onItemsLoaded(sorted)
-        // 정렬된 순서를 DataStore에 저장 → 홈 탭 북마크 섹션도 동일 순서 유지
         store.saveBookmarkList(sorted.map { it.manga })
-        if (refresh) isRefreshing = false else isLoading = false
+        store.saveBookmarkDetails(sorted)
     }
 
-    LaunchedEffect(items, cfCookies) {
+    LaunchedEffect(items) {
+        // 캐시가 있으면 즉시 표시, 없으면 서버에서 로드
         if (cachedItems.isNotEmpty()) {
             bookmarkItems = cachedItems
             isLoading = false
             return@LaunchedEffect
         }
-        if (cfCookies.isEmpty()) return@LaunchedEffect
-        loadBookmarks()
+        val cached = store.parseBookmarkDetails(bookmarkDetailCache)
+        if (cached.isNotEmpty()) {
+            bookmarkItems = cached
+            onItemsLoaded(cached)
+            isLoading = false
+            return@LaunchedEffect
+        }
+        if (cfCookies.isEmpty()) { isLoading = false; return@LaunchedEffect }
+        fetchAndSave()
+        isLoading = false
     }
 
     Scaffold(
@@ -181,7 +189,11 @@ fun BookmarkListScreen(
                 Text("북마크한 만화가 없어요", style = MaterialTheme.typography.bodyMedium)
             }
             else -> PullToRefreshWrapper(
-                onRefresh = { loadBookmarks(refresh = true) },
+                onRefresh = {
+                    isRefreshing = true
+                    fetchAndSave()
+                    isRefreshing = false
+                },
                 modifier = Modifier.fillMaxSize().padding(padding)
             ) {
                 LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {

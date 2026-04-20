@@ -27,6 +27,7 @@ class SettingsDataStore(private val context: Context) {
         val AUTO_RESOLVE_NUMBER_KEY = stringPreferencesKey("auto_resolve_number")
         val HOME_CONTENT_KEY = stringPreferencesKey("home_content")
         val EPISODE_CACHE_KEY = stringPreferencesKey("episode_cache")
+        val BOOKMARK_DETAIL_KEY = stringPreferencesKey("bookmark_detail")
     }
 
     val baseUrl: Flow<String> = context.dataStore.data.map { prefs ->
@@ -75,6 +76,10 @@ class SettingsDataStore(private val context: Context) {
 
     val homeContent: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[HOME_CONTENT_KEY] ?: ""
+    }
+
+    val bookmarkDetail: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[BOOKMARK_DETAIL_KEY] ?: ""
     }
 
     val episodeCache: Flow<String> = context.dataStore.data.map { prefs ->
@@ -253,10 +258,36 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    // 북마크 최신화 정보 캐시
+    suspend fun saveBookmarkDetails(list: List<BookmarkedManga>) {
+        val serialized = list.joinToString("|") {
+            "${it.manga.id}::${it.manga.name}::${it.manga.thumb}::${it.manga.referer}" +
+            "::${it.latestEpisodeId}::${it.latestEpisodeTitle}::${it.latestEpisodeDate}"
+        }
+        context.dataStore.edit { prefs -> prefs[BOOKMARK_DETAIL_KEY] = serialized }
+    }
+
+    fun parseBookmarkDetails(str: String): List<BookmarkedManga> {
+        if (str.isEmpty()) return emptyList()
+        return str.split("|").mapNotNull { item ->
+            val p = item.split("::")
+            if (p.size >= 7) BookmarkedManga(
+                manga = Manga(
+                    id = p[0].toIntOrNull() ?: return@mapNotNull null,
+                    name = p[1], thumb = p[2], referer = p[3]
+                ),
+                latestEpisodeId = p[4].toIntOrNull() ?: 0,
+                latestEpisodeTitle = p[5],
+                latestEpisodeDate = p[6]
+            ) else null
+        }
+    }
+
     suspend fun clearCache() {
         context.dataStore.edit { prefs ->
             prefs.remove(HOME_CONTENT_KEY)
             prefs.remove(EPISODE_CACHE_KEY)
+            prefs.remove(BOOKMARK_DETAIL_KEY)
         }
     }
 }
