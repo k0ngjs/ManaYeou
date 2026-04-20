@@ -104,6 +104,11 @@ fun MainScreen() {
         bookmarkListData = null
     }
 
+    // 인증 진행 중이면 오류 다이얼로그 억제
+    fun showAuthIfNeeded() {
+        if (!showCloudflareScreen && !showCaptchaDialog) showAuthDialog = true
+    }
+
     suspend fun loadHomeContent(forceRefresh: Boolean = false) {
         // 캐시가 있고 강제 새로고침이 아니면 캐시를 즉시 표시하고 백그라운드 갱신 생략
         if (!forceRefresh && homeLoaded) return
@@ -126,7 +131,7 @@ fun MainScreen() {
                     scope.launch { snackbarHostState.showSnackbar("목록을 불러오지 못했습니다") }
                 } else {
                     homeStatus = "목록을 불러오지 못했습니다"
-                    showAuthDialog = true
+                    showAuthIfNeeded()
                 }
             } else {
                 homeContent = result
@@ -136,7 +141,7 @@ fun MainScreen() {
         } catch (e: Exception) {
             if (!homeLoaded) {
                 homeStatus = "목록을 불러오지 못했습니다"
-                showAuthDialog = true
+                showAuthIfNeeded()
             }
         }
         homeLoading = false
@@ -237,7 +242,7 @@ fun MainScreen() {
                 selectedEpisode = null
                 selectedManga = Manga(seriesId, "", "", "")
             },
-            onAuthNeeded = { showAuthDialog = true }
+            onAuthNeeded = { showAuthIfNeeded() }
         )
         return
     }
@@ -285,7 +290,7 @@ fun MainScreen() {
                     onEpisodeClick = { id, title ->
                         selectedEpisode = Pair(id, title)
                     },
-                    onAuthNeeded = { showAuthDialog = true }
+                    onAuthNeeded = { showAuthIfNeeded() }
                 )
                 updateListData != null -> UpdateListScreen(
                     title = updateListData!!.first,
@@ -341,7 +346,7 @@ fun MainScreen() {
                             onMoreUpdated = { updateListData = Pair("최신 만화", it) },
                             onMoreRecent = { recentListData = store.parseRecentMangaList(recentMangaStr) },
                             onMoreBookmark = { bookmarkListData = store.parseBookmarkList(bookmarkStr) },
-                            onAuthNeeded = { showAuthDialog = true }
+                            onAuthNeeded = { showAuthIfNeeded() }
                         )
                         1 -> SearchScreen(
                             query = searchQuery,
@@ -356,7 +361,7 @@ fun MainScreen() {
                                     try {
                                         searchResults = searchManga(baseUrl, query, cfCookies)
                                     } catch (e: Exception) {
-                                        showAuthDialog = true
+                                        showAuthIfNeeded()
                                     }
                                     searchLoading = false
                                 }
