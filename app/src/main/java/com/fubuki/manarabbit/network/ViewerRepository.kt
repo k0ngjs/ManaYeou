@@ -49,8 +49,26 @@ suspend fun fetchViewerData(baseUrl: String, episodeId: Int, cookieStr: String =
             ?.split("?")?.firstOrNull()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
         val nextId = nextHref.split("comic/").getOrNull(1)
             ?.split("?")?.firstOrNull()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
-        val prevTitle = nav?.selectFirst("a#goPrevBtn")?.attr("alt") ?: ""
-        val nextTitle = nav?.selectFirst("a#goNextBtn")?.attr("alt") ?: ""
+        val prevTitle = run {
+            val a = nav?.selectFirst("a#goPrevBtn") ?: return@run ""
+            a.attr("title").ifEmpty {
+                a.ownText().trim().ifEmpty {
+                    a.select("b, span.title, span.subject, .toon-title").firstOrNull()?.text()?.trim().orEmpty().ifEmpty {
+                        a.text().trim()
+                    }
+                }
+            }
+        }
+        val nextTitle = run {
+            val a = nav?.selectFirst("a#goNextBtn") ?: return@run ""
+            a.attr("title").ifEmpty {
+                a.ownText().trim().ifEmpty {
+                    a.select("b, span.title, span.subject, .toon-title").firstOrNull()?.text()?.trim().orEmpty().ifEmpty {
+                        a.text().trim()
+                    }
+                }
+            }
+        }
 
         // 목록 링크(last)에서 seriesId 파싱
         val seriesId = nav?.select("a")?.last()
