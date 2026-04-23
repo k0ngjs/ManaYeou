@@ -73,6 +73,7 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
     if (showImportSuccess) {
         AlertDialog(
             onDismissRequest = { showImportSuccess = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text("완료") },
             text = { Text("데이터를 불러왔어요. 앱을 재시작해주세요.") },
             confirmButton = {
@@ -102,6 +103,7 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
         if (showHelp) {
             AlertDialog(
                 onDismissRequest = { showHelp = false },
+                containerColor = MaterialTheme.colorScheme.surface,
                 title = { Text("설정 도움말") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

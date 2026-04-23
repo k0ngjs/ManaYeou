@@ -1,7 +1,5 @@
 package com.fubuki.manarabbit.ui.episode
 
-import com.fubuki.manarabbit.network.USER_AGENT
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,7 +17,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.Episode
 import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.MangaDetail
@@ -28,6 +25,7 @@ import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
+import com.fubuki.manarabbit.ui.common.mangaImageRequest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -59,13 +57,12 @@ fun EpisodeScreen(
     }
     var mangaDetail by remember { mutableStateOf(initialDetail) }
     var isLoading by remember { mutableStateOf(initialDetail.episodes.isEmpty()) }
-    var isRefreshing by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     val bookmarkStr by store.bookmarkManga.collectAsState(initial = "")
-    val isBookmarked = store.isBookmarked(mangaId, bookmarkStr)
+    val isBookmarked = remember(mangaId, bookmarkStr) { store.isBookmarked(mangaId, bookmarkStr) }
 
     suspend fun loadDetail(refresh: Boolean = false) {
-        if (refresh) isRefreshing = true else isLoading = true
+        if (!refresh) isLoading = true
         status = ""
         try {
             val result = fetchMangaDetail(baseUrl, mangaId, cfCookies)
@@ -75,7 +72,6 @@ fun EpisodeScreen(
             } else {
                 mangaDetail = result
                 onDetailLoaded(result)
-                // 에피소드 목록 DataStore에 캐시
                 scope.launch { store.saveEpisodeCache(mangaId, result.episodes) }
                 val existing = store.parseRecentMangaList(store.recentManga.first())
                     .find { it.mangaId == mangaId }
@@ -92,7 +88,7 @@ fun EpisodeScreen(
         } catch (e: Exception) {
             status = "에피소드를 불러오지 못했습니다"
         }
-        if (refresh) isRefreshing = false else isLoading = false
+        if (!refresh) isLoading = false
     }
 
     LaunchedEffect(mangaId, baseUrl) {
@@ -243,12 +239,7 @@ fun MangaInfoHeader(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(info.thumb)
-                    .addHeader("Referer", baseUrl)
-                    .addHeader("User-Agent", USER_AGENT)
-                    .crossfade(true)
-                    .build(),
+                model = mangaImageRequest(context, info.thumb, baseUrl),
                 contentDescription = info.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop

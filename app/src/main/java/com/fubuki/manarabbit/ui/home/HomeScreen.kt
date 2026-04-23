@@ -1,7 +1,5 @@
 package com.fubuki.manarabbit.ui.home
 
-import com.fubuki.manarabbit.network.USER_AGENT
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,12 +15,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.HomeContent
 import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.RecentManga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
+import com.fubuki.manarabbit.ui.common.mangaImageRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -160,12 +158,7 @@ fun MangaCard(manga: Manga, onClick: () -> Unit = {}) {
     Column(modifier = Modifier.width(110.dp).clickable { onClick() }) {
         Card(modifier = Modifier.width(110.dp).height(150.dp)) {
             AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(manga.thumb)
-                    .addHeader("Referer", manga.referer)
-                    .addHeader("User-Agent", USER_AGENT)
-                    .crossfade(true)
-                    .build(),
+                model = mangaImageRequest(context, manga.thumb, manga.referer),
                 contentDescription = manga.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -187,12 +180,7 @@ fun RecentMangaCard(manga: RecentManga, onClick: () -> Unit = {}) {
     Column(modifier = Modifier.width(110.dp).clickable { onClick() }) {
         Card(modifier = Modifier.width(110.dp).height(150.dp)) {
             AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(manga.thumb)
-                    .addHeader("Referer", manga.referer)
-                    .addHeader("User-Agent", USER_AGENT)
-                    .crossfade(true)
-                    .build(),
+                model = mangaImageRequest(context, manga.thumb, manga.referer),
                 contentDescription = manga.mangaName,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop

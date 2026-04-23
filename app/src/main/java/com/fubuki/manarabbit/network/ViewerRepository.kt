@@ -54,9 +54,10 @@ suspend fun fetchViewerData(baseUrl: String, episodeId: Int, cookieStr: String =
             ?.split("?")?.firstOrNull()
             ?.filter { it.isDigit() }?.toIntOrNull() ?: 0
 
-        // 에피소드 제목: div.toon-title의 title 속성
-        val episodeTitle = doc.selectFirst("div.toon-title")?.attr("title")?.trim()
-            ?: doc.selectFirst("div.toon-title")?.ownText()?.trim() ?: ""
+        // 에피소드 제목: div.toon-title의 title 속성 (없으면 텍스트 fallback)
+        val titleEl = doc.selectFirst("div.toon-title")
+        val episodeTitle = titleEl?.attr("title")?.trim()?.ifEmpty { null }
+            ?: titleEl?.ownText()?.trim() ?: ""
         val mangaName = episodeTitle
         val thumb = doc.selectFirst("meta[property=og:image]")?.attr("content") ?: ""
 

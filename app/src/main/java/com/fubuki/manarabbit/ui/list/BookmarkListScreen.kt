@@ -1,7 +1,5 @@
 package com.fubuki.manarabbit.ui.list
 
-import com.fubuki.manarabbit.network.USER_AGENT
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,13 +18,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.BookmarkedManga
 import com.fubuki.manarabbit.data.Manga
 import com.fubuki.manarabbit.data.SettingsDataStore
 import com.fubuki.manarabbit.network.fetchEpisodeList
 import com.fubuki.manarabbit.network.fetchMangaDetail
 import com.fubuki.manarabbit.ui.common.PullToRefreshWrapper
+import com.fubuki.manarabbit.ui.common.mangaImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -49,7 +47,6 @@ fun BookmarkListScreen(
 
     var bookmarkItems by remember { mutableStateOf<List<BookmarkedManga>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var isRefreshing by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<Int>()) }
 
@@ -103,22 +100,34 @@ fun BookmarkListScreen(
     }
 
     LaunchedEffect(items) {
-        // 캐시가 있으면 즉시 표시, 없으면 서버에서 로드
-        if (cachedItems.isNotEmpty()) {
+        val itemIds = items.map { it.id }.toSet()
+
+        // 1. 인메모리 캐시가 현재 목록과 완전히 일치하면 즉시 표시
+        if (cachedItems.isNotEmpty() && cachedItems.map { it.manga.id }.toSet() == itemIds) {
             bookmarkItems = cachedItems
             isLoading = false
             return@LaunchedEffect
         }
-        val cached = store.parseBookmarkDetails(bookmarkDetailCache)
-        if (cached.isNotEmpty()) {
+
+        // 2. DataStore 캐시 확인 (현재 items와 일치하는 항목만 필터)
+        val cached = store.parseBookmarkDetails(bookmarkDetailCache).filter { it.manga.id in itemIds }
+        if (cached.map { it.manga.id }.toSet() == itemIds) {
             bookmarkItems = cached
             onItemsLoaded(cached)
             isLoading = false
             return@LaunchedEffect
         }
-        if (cfCookies.isEmpty()) { isLoading = false; return@LaunchedEffect }
-        fetchAndSave()
+
+        // 3. 캐시 불일치 → 가진 것 먼저 표시 (최소한 이름·썸네일은 보여줌)
+        val partial = items.map { manga ->
+            cached.find { it.manga.id == manga.id } ?: BookmarkedManga(manga = manga)
+        }
+        bookmarkItems = partial
         isLoading = false
+
+        // 4. cfCookies가 있으면 에피소드 정보 백그라운드 갱신
+        if (cfCookies.isEmpty() || baseUrl.isEmpty()) return@LaunchedEffect
+        fetchAndSave()
     }
 
     Scaffold(
@@ -189,11 +198,7 @@ fun BookmarkListScreen(
                 Text("북마크한 만화가 없어요", style = MaterialTheme.typography.bodyMedium)
             }
             else -> PullToRefreshWrapper(
-                onRefresh = {
-                    isRefreshing = true
-                    fetchAndSave()
-                    isRefreshing = false
-                },
+                onRefresh = { fetchAndSave() },
                 modifier = Modifier.fillMaxSize().padding(padding)
             ) {
                 LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
@@ -227,12 +232,7 @@ fun BookmarkListScreen(
                             }
                             Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
                                 AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(item.manga.thumb)
-                                        .addHeader("Referer", item.manga.referer)
-                                        .addHeader("User-Agent", USER_AGENT)
-                                        .crossfade(true)
-                                        .build(),
+                                    model = mangaImageRequest(context, item.manga.thumb, item.manga.referer),
                                     contentDescription = item.manga.name,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop

@@ -190,6 +190,7 @@ fun MainScreen() {
     if (showAuthDialog) {
         AlertDialog(
             onDismissRequest = { showAuthDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text("접속 오류") },
             text = { Text("콘텐츠를 불러오지 못했습니다.\nCAPTCHA 인증이 필요할 수 있어요.") },
             confirmButton = {

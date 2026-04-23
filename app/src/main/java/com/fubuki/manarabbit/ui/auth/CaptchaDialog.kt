@@ -126,6 +126,7 @@ fun CaptchaDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
         title = { Text("CAPTCHA 인증") },
         text = {
             Column(

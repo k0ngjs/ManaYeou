@@ -494,6 +494,11 @@ fun ViewerSettingsDialog(store: SettingsDataStore, onDismiss: () -> Unit) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                val chipColors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = Color.Black
+                )
+
                 Text("뷰어 설정", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(16.dp))
 
@@ -505,10 +510,7 @@ fun ViewerSettingsDialog(store: SettingsDataStore, onDismiss: () -> Unit) {
                             selected = viewerMode == value,
                             onClick = { scope.launch { store.saveViewerMode(value) } },
                             label = { Text(label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = Color.Black
-                            )
+                            colors = chipColors
                         )
                     }
                 }
@@ -523,10 +525,7 @@ fun ViewerSettingsDialog(store: SettingsDataStore, onDismiss: () -> Unit) {
                                 selected = viewerDirection == value,
                                 onClick = { scope.launch { store.saveViewerDirection(value) } },
                                 label = { Text(label) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                    selectedLabelColor = Color.Black
-                                )
+                                colors = chipColors
                             )
                         }
                     }
@@ -554,10 +553,7 @@ fun ViewerSettingsDialog(store: SettingsDataStore, onDismiss: () -> Unit) {
                                     selected = viewerDoubleFirst == value,
                                     onClick = { scope.launch { store.saveViewerDoubleFirst(value) } },
                                     label = { Text(label) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = Color.Black
-                                    )
+                                    colors = chipColors
                                 )
                             }
                         }

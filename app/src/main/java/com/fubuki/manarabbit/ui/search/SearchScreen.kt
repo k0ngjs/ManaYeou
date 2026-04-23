@@ -1,7 +1,5 @@
 package com.fubuki.manarabbit.ui.search
 
-import com.fubuki.manarabbit.network.USER_AGENT
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,8 +18,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.fubuki.manarabbit.data.Manga
+import com.fubuki.manarabbit.ui.common.mangaImageRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,12 +83,7 @@ fun SearchScreen(
                         ) {
                             Card(modifier = Modifier.size(width = 70.dp, height = 95.dp)) {
                                 AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(manga.thumb)
-                                        .addHeader("Referer", manga.referer)
-                                        .addHeader("User-Agent", USER_AGENT)
-                                        .crossfade(true)
-                                        .build(),
+                                    model = mangaImageRequest(context, manga.thumb, manga.referer),
                                     contentDescription = manga.name,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
