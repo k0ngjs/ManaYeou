@@ -38,6 +38,7 @@ fun CaptchaDialog(
     onDismiss: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
     var answer by remember { mutableStateOf("") }
     var captchaImage by remember { mutableStateOf<ImageBitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -160,13 +161,13 @@ fun CaptchaDialog(
                     ),
                     keyboardActions = KeyboardActions(onDone = {
                         focusManager.clearFocus()
+                        scope.launch { submit() }
                     }),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
-            val scope = rememberCoroutineScope()
             Button(
                 onClick = { scope.launch { submit() } },
                 enabled = answer.isNotBlank() && !isSubmitting

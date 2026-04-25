@@ -2,8 +2,6 @@ package com.fubuki.manarabbit.ui.auth
 
 import android.annotation.SuppressLint
 import android.webkit.CookieManager
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
@@ -79,22 +77,12 @@ fun CloudflareScreen(
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.userAgentString = USER_AGENT
+                    // WebView가 실제로 사용하는 UA를 OkHttp와 동기화
+                    // (에뮬레이터 등에서 WebView가 UA를 변형할 수 있음)
+                    settings.userAgentString.takeIf { it.isNotEmpty() }?.let { USER_AGENT = it }
 
                     webViewClient = object : WebViewClient() {
-                        // 페이지 로드 횟수 추적
-                        // 첫 번째 로드는 무시 (CF 챌린지 페이지 또는 기존 쿠키로 통과한 페이지)
-                        // 두 번째 로드(CF 챌린지 통과 후 리다이렉트)부터 자동 완료 감지
                         private var pageLoadCount = 0
-
-                        override fun shouldInterceptRequest(
-                            view: WebView,
-                            request: WebResourceRequest
-                        ): WebResourceResponse? {
-                            // WebView 실제 UA를 OkHttp와 동기화
-                            request.requestHeaders["User-Agent"]?.takeIf { it.isNotEmpty() }
-                                ?.let { USER_AGENT = it }
-                            return super.shouldInterceptRequest(view, request)
-                        }
 
                         override fun onPageFinished(view: WebView, resUrl: String) {
                             // 광고 제거

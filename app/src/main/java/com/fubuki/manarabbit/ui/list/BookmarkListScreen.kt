@@ -131,7 +131,6 @@ fun BookmarkListScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = { Text("북마크") },

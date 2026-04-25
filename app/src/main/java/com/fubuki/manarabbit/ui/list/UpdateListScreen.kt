@@ -29,7 +29,6 @@ fun UpdateListScreen(
     val context = LocalContext.current
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = { Text(title) },

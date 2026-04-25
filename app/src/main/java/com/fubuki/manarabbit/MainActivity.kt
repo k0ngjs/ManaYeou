@@ -69,6 +69,8 @@ fun MainScreen() {
     var showAuthDialog by remember { mutableStateOf(false) }
     // CF 완료 시 쿠키를 바로 CaptchaDialog에 전달 (DataStore 업데이트 대기 불필요)
     var pendingCfCookies by remember { mutableStateOf("") }
+    // CAPTCHA 완료 시 뷰어에 재로드 신호
+    var viewerAuthTrigger by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     val store = remember { SettingsDataStore(context) }
     val baseUrl by store.baseUrl.collectAsState(initial = "")
@@ -228,6 +230,7 @@ fun MainScreen() {
             cookieStr = pendingCfCookies.ifEmpty { cfCookies },
             onDone = {
                 showCaptchaDialog = false
+                viewerAuthTrigger++
                 scope.launch { loadHomeContent() }
             },
             onDismiss = { showCaptchaDialog = false }
@@ -238,6 +241,7 @@ fun MainScreen() {
         ViewerScreen(
             episodeId = selectedEpisode!!.first,
             episodeTitle = selectedEpisode!!.second,
+            authTrigger = viewerAuthTrigger,
             onBack = { selectedEpisode = null },
             onList = { seriesId ->
                 selectedEpisode = null

@@ -106,8 +106,6 @@ fun EpisodeScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
         topBar = {
             TopAppBar(
                 title = { Text(mangaDetail.info.name.ifEmpty { mangaName }, maxLines = 1) },

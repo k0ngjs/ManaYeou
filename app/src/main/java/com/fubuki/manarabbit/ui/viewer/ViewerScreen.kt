@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
@@ -58,6 +59,7 @@ import okhttp3.Request
 fun ViewerScreen(
     episodeId: Int,
     episodeTitle: String,
+    authTrigger: Int = 0,
     onBack: () -> Unit,
     onList: ((Int) -> Unit)? = null,
     onAuthNeeded: () -> Unit = {}
@@ -138,7 +140,7 @@ fun ViewerScreen(
     val hasPrev = prevId > 0
     val hasNext = nextId > 0
 
-    fun loadEpisode(id: Int, title: String, startPage: Int = 0) {
+    fun loadEpisode(id: Int, title: String, startPage: Int = 0, suppressAuth: Boolean = false) {
         currentId = id
         currentTitle = title
         images = emptyList()
@@ -151,14 +153,13 @@ fun ViewerScreen(
         nextId = 0
         scope.launch {
             try {
-                // fetchViewerData: /comic/{id} 1번만 요청
-                val result = fetchViewerData(baseUrl, id, cfCookies)
+                val cookies = store.cfCookies.first()
+                val result = fetchViewerData(baseUrl, id, cookies)
                 if (result.images.isEmpty()) {
                     status = "이미지를 불러오지 못했습니다"
                     loadFailed = true
-                    onAuthNeeded()
+                    if (!suppressAuth) onAuthNeeded()
                 } else {
-
                     images = result.images
                     prevId = result.prevId
                     nextId = result.nextId
@@ -181,16 +182,23 @@ fun ViewerScreen(
             } catch (e: Exception) {
                 status = "이미지를 불러오지 못했습니다"
                 loadFailed = true
-                onAuthNeeded()
+                if (!suppressAuth) onAuthNeeded()
             }
             isLoading = false
         }
     }
 
-    // 인증 완료 후 cfCookies가 업데이트되면 자동으로 재시도
+    // cfCookies 변경 시 재시도 (CF 인증 완료 후) — 팝업 억제
     LaunchedEffect(cfCookies) {
-        if (loadFailed && cfCookies.isNotEmpty() && baseUrl.isNotEmpty()) {
-            loadEpisode(currentId, currentTitle, currentImageIndex)
+        if (cfCookies.isNotEmpty() && baseUrl.isNotEmpty() && images.isEmpty()) {
+            loadEpisode(currentId, currentTitle, currentImageIndex, suppressAuth = true)
+        }
+    }
+
+    // CAPTCHA 완료 후 재시도 — 팝업 억제
+    LaunchedEffect(authTrigger) {
+        if (authTrigger > 0 && baseUrl.isNotEmpty()) {
+            loadEpisode(currentId, currentTitle, currentImageIndex, suppressAuth = true)
         }
     }
 
@@ -237,7 +245,7 @@ fun ViewerScreen(
             val recentStr = store.recentManga.first()
             val savedRecentPage = store.parseRecentMangaList(recentStr)
                 .find { it.lastEpisodeId == currentId }?.lastPage ?: 0
-            loadEpisode(currentId, currentTitle, savedRecentPage)
+            loadEpisode(currentId, currentTitle, savedRecentPage, suppressAuth = true)
         }
     }
 
@@ -496,63 +504,77 @@ fun ViewerSettingsDialog(store: SettingsDataStore, onDismiss: () -> Unit) {
             Column(modifier = Modifier.padding(16.dp)) {
                 val chipColors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = Color.Black
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                 )
+
+                @Composable
+                fun SettingRow(label: String, content: @Composable RowScope.() -> Unit) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            label,
+                            modifier = Modifier.width(40.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) { content() }
+                    }
+                }
 
                 Text("뷰어 설정", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(16.dp))
 
-                Text("읽기 방식", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("scroll" to "스크롤 보기", "pager" to "페이지 보기").forEach { (value, label) ->
+                SettingRow("형식") {
+                    listOf("scroll" to "스크롤", "pager" to "페이지").forEach { (value, label) ->
                         FilterChip(
+                            modifier = Modifier.weight(1f),
                             selected = viewerMode == value,
                             onClick = { scope.launch { store.saveViewerMode(value) } },
-                            label = { Text(label) },
+                            label = { Text(label, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
                             colors = chipColors
                         )
                     }
                 }
 
                 if (viewerMode == "pager") {
-                    Spacer(Modifier.height(16.dp))
-                    Text("페이지 방향", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("ltr" to "좌에서 우로", "rtl" to "우에서 좌로").forEach { (value, label) ->
+                    SettingRow("모드") {
+                        listOf(false to "1장씩", true to "2장씩").forEach { (value, label) ->
                             FilterChip(
-                                selected = viewerDirection == value,
-                                onClick = { scope.launch { store.saveViewerDirection(value) } },
-                                label = { Text(label) },
+                                modifier = Modifier.weight(1f),
+                                selected = viewerDouble == value,
+                                onClick = { scope.launch { store.saveViewerDouble(value) } },
+                                label = { Text(label, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
                                 colors = chipColors
                             )
                         }
                     }
-
-                    Spacer(Modifier.height(16.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("2페이지 보기", style = MaterialTheme.typography.labelLarge)
-                        Switch(
-                            checked = viewerDouble,
-                            onCheckedChange = { scope.launch { store.saveViewerDouble(it) } }
-                        )
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow("방향") {
+                        listOf("ltr" to "왼쪽", "rtl" to "오른쪽").forEach { (value, label) ->
+                            FilterChip(
+                                modifier = Modifier.weight(1f),
+                                selected = viewerDirection == value,
+                                onClick = { scope.launch { store.saveViewerDirection(value) } },
+                                label = { Text(label, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
+                                colors = chipColors
+                            )
+                        }
                     }
-
                     if (viewerDouble) {
                         Spacer(Modifier.height(8.dp))
-                        Text("첫 페이지", style = MaterialTheme.typography.labelLarge)
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingRow("표지") {
                             listOf("single" to "1장", "double" to "2장").forEach { (value, label) ->
                                 FilterChip(
+                                    modifier = Modifier.weight(1f),
                                     selected = viewerDoubleFirst == value,
                                     onClick = { scope.launch { store.saveViewerDoubleFirst(value) } },
-                                    label = { Text(label) },
+                                    label = { Text(label, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
                                     colors = chipColors
                                 )
                             }

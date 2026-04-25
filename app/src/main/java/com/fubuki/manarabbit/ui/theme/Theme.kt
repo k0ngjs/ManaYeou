@@ -64,7 +64,7 @@ private val LightColorScheme = lightColorScheme(
     primary               = Accent,
     onPrimary             = Color.Black,
     primaryContainer      = AccentContainerLight,
-    onPrimaryContainer    = Color(0xFF003A17),
+    onPrimaryContainer    = AccentContainerDark,
     inversePrimary        = AccentDark,
 
     // 보조 (무채색)
@@ -77,7 +77,7 @@ private val LightColorScheme = lightColorScheme(
     tertiary              = Accent,
     onTertiary            = Color.Black,
     tertiaryContainer     = AccentContainerLight,
-    onTertiaryContainer   = Color(0xFF003A17),
+    onTertiaryContainer   = AccentContainerDark,
 
     // 배경 / 서피스
     background            = Light1,

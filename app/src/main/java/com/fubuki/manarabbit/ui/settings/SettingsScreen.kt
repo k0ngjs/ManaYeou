@@ -2,6 +2,7 @@ package com.fubuki.manarabbit.ui.settings
 
 import android.app.Activity
 import android.content.Intent
+import android.webkit.CookieManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -204,7 +205,11 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                     Text("인증")
                 }
                 OutlinedButton(
-                    onClick = { scope.launch { store.clearCfCookies() } },
+                    onClick = {
+                        CookieManager.getInstance().removeAllCookies(null)
+                        CookieManager.getInstance().flush()
+                        scope.launch { store.clearCfCookies() }
+                    },
                     modifier = Modifier.weight(1f),
                     enabled = cfCookies.isNotEmpty()
                 ) {
@@ -232,7 +237,7 @@ fun SettingsScreen(onCfAuthClick: () -> Unit = {}) {
                         label = { Text(label) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = androidx.compose.ui.graphics.Color.Black
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         )
                     )
                 }
