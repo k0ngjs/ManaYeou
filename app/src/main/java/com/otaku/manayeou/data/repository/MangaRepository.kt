@@ -59,9 +59,10 @@ class MangaRepository(context: Context) {
         return scrapePopular(base).also { Log.d("MangaRepo", "fetchPopular: ${it.size} items") }
     }
 
-    suspend fun fetchSeries(url: String): Series? = scrapeSeries(url)
-
     suspend fun fetchChapters(seriesUrl: String): List<Chapter> = scrapeChapters(seriesUrl)
+
+    // 디테일 화면 전용: 시리즈 정보 + 챕터 목록을 한 번의 fetchDoc으로 함께 받아옴
+    suspend fun fetchSeriesDetail(url: String): Pair<Series?, List<Chapter>> = scrapeSeriesDetail(url)
 
     suspend fun fetchPages(chapterUrl: String): List<MangaPage> = scrapePages(chapterUrl)
 
@@ -112,6 +113,7 @@ class MangaRepository(context: Context) {
                 Series(
                     id = e.seriesId,
                     title = e.seriesTitle,
+                    author = e.seriesAuthor,
                     coverUrl = e.coverUrl,
                     // 예전 기록엔 seriesUrl이 없을 수 있어(마이그레이션 이전 데이터),
                     // 그 경우에만 KmanaScraper와 동일한 "/episode/{id}/1/1" 패턴으로 복원
@@ -134,6 +136,7 @@ class MangaRepository(context: Context) {
         seriesId: String,
         seriesUrl: String,
         seriesTitle: String,
+        seriesAuthor: String,
         coverUrl: String,
         lastPage: Int,
         totalPages: Int
@@ -144,6 +147,7 @@ class MangaRepository(context: Context) {
                 seriesId = seriesId,
                 seriesUrl = seriesUrl,
                 seriesTitle = seriesTitle,
+                seriesAuthor = seriesAuthor,
                 coverUrl = coverUrl,
                 chapterTitle = chapterTitle,
                 lastPage = lastPage,
@@ -184,6 +188,7 @@ class MangaRepository(context: Context) {
                     put("seriesId", h.seriesId)
                     put("seriesUrl", h.seriesUrl)
                     put("seriesTitle", h.seriesTitle)
+                    put("seriesAuthor", h.seriesAuthor)
                     put("coverUrl", h.coverUrl)
                     put("chapterTitle", h.chapterTitle)
                     put("lastPage", h.lastPage)
@@ -224,6 +229,7 @@ class MangaRepository(context: Context) {
                         seriesId = o.optString("seriesId"),
                         seriesUrl = o.optString("seriesUrl"),
                         seriesTitle = o.optString("seriesTitle"),
+                        seriesAuthor = o.optString("seriesAuthor"),
                         coverUrl = o.optString("coverUrl"),
                         chapterTitle = o.optString("chapterTitle"),
                         lastPage = o.optInt("lastPage", 0),

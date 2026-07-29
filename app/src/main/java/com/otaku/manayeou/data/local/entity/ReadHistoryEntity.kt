@@ -9,6 +9,7 @@ data class ReadHistoryEntity(
     val seriesId: String,
     val seriesUrl: String = "",
     val seriesTitle: String,
+    val seriesAuthor: String = "",
     val coverUrl: String,
     val chapterTitle: String,
     val lastPage: Int = 0,

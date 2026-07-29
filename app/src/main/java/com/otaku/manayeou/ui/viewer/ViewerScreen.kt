@@ -32,6 +32,7 @@ import coil.request.ImageRequest
 import com.otaku.manayeou.data.local.ReadingDirection
 import com.otaku.manayeou.data.model.MangaPage
 import com.otaku.manayeou.data.model.ViewerMode
+import com.otaku.manayeou.data.model.displayTitle
 
 @Composable
 fun ViewerScreen(
@@ -40,6 +41,7 @@ fun ViewerScreen(
     seriesId: String,
     seriesUrl: String,
     seriesTitle: String,
+    seriesAuthor: String,
     coverUrl: String,
     onBack: () -> Unit,
     onNavigateChapter: (chapterUrl: String, chapterTitle: String) -> Unit
@@ -48,7 +50,7 @@ fun ViewerScreen(
     val viewModel: ViewerViewModel = viewModel(
         key = chapterUrl,
         factory = viewModelFactory {
-            initializer { ViewerViewModel(app, chapterUrl, chapterTitle, seriesId, seriesUrl, seriesTitle, coverUrl) }
+            initializer { ViewerViewModel(app, chapterUrl, chapterTitle, seriesId, seriesUrl, seriesTitle, seriesAuthor, coverUrl) }
         }
     )
     val state by viewModel.state.collectAsState()
@@ -116,8 +118,8 @@ fun ViewerScreen(
                 total = state.pages.size,
                 prevEnabled = state.prevChapter != null,
                 nextEnabled = state.nextChapter != null,
-                onPrev = { state.prevChapter?.let { onNavigateChapter(it.url, it.title.ifBlank { "${it.number}화" }) } },
-                onNext = { state.nextChapter?.let { onNavigateChapter(it.url, it.title.ifBlank { "${it.number}화" }) } }
+                onPrev = { state.prevChapter?.let { onNavigateChapter(it.url, it.displayTitle(seriesTitle)) } },
+                onNext = { state.nextChapter?.let { onNavigateChapter(it.url, it.displayTitle(seriesTitle)) } }
             )
         }
     }

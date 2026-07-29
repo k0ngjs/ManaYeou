@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,12 +31,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private const val GITHUB_URL = "https://github.com/k0ngjs/ManaYeou"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val uriHandler = LocalUriHandler.current
     val snackbarHostState = remember { SnackbarHostState() }
     var showHelpDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -176,7 +180,17 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .padding(top = 16.dp),
+                textAlign = TextAlign.Center
+            )
+            Text(
+                "Github",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { uriHandler.openUri(GITHUB_URL) }
+                    .padding(top = 2.dp, bottom = 16.dp),
                 textAlign = TextAlign.Center
             )
         }

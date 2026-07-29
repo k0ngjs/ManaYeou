@@ -130,49 +130,53 @@ private fun parseToonListJson(body: String, baseUrl: String): List<Series> {
     }
 }
 
-// /episode/ID/1/1 페이지에서 시리즈 정보 + 챕터 목록 추출
-suspend fun scrapeSeries(url: String): Series? {
-    return try {
-        val doc = fetchDoc(url)
-        val id = url.substringAfter("/episode/").substringBefore("/")
-        val title = (doc.selectFirst("h4") ?: doc.selectFirst("h3") ?: doc.selectFirst("h2"))
+// /episode/ID/1/1 페이지에서 시리즈 정보 추출 (doc은 fetchDoc(url) 결과)
+private fun parseSeriesDoc(doc: Document, url: String): Series? {
+    val id = url.substringAfter("/episode/").substringBefore("/")
+    val title = (doc.selectFirst("h4") ?: doc.selectFirst("h3") ?: doc.selectFirst("h2"))
+        ?.text()?.trim() ?: ""
+    // doc.selectFirst("img") 는 헤더 로고를 잘못 잡으므로 시리즈 정보 영역으로 범위 한정
+    val coverRaw = doc.selectFirst(".contents_view_info [data-src]")?.attr("data-src")
+        ?: doc.selectFirst(".contents_view_info img")?.let { it.attr("data-src").ifBlank { it.attr("src") } }
+        ?: ""
+    val cover = resolveImgUrl(coverRaw)
+
+    // 장르/작가/소개는 .date_info_item 안에 .d_name(라벨) + .d_info(값) 쌍으로 존재
+    var author = ""
+    var genre = ""
+    var synopsis = ""
+    doc.select(".date_info_item").forEach { item ->
+        val label = item.selectFirst(".d_name")?.text()?.trim() ?: return@forEach
+        val value = (item.selectFirst(".mEpisodeMoreText") ?: item.selectFirst(".d_info"))
             ?.text()?.trim() ?: ""
-        // doc.selectFirst("img") 는 헤더 로고를 잘못 잡으므로 시리즈 정보 영역으로 범위 한정
-        val coverRaw = doc.selectFirst(".contents_view_info [data-src]")?.attr("data-src")
-            ?: doc.selectFirst(".contents_view_info img")?.let { it.attr("data-src").ifBlank { it.attr("src") } }
-            ?: ""
-        val cover = resolveImgUrl(coverRaw)
-
-        // 장르/작가/소개는 .date_info_item 안에 .d_name(라벨) + .d_info(값) 쌍으로 존재
-        var author = ""
-        var genre = ""
-        var synopsis = ""
-        doc.select(".date_info_item").forEach { item ->
-            val label = item.selectFirst(".d_name")?.text()?.trim() ?: return@forEach
-            val value = (item.selectFirst(".mEpisodeMoreText") ?: item.selectFirst(".d_info"))
-                ?.text()?.trim() ?: ""
-            when {
-                label.startsWith("장르") -> genre = value
-                label.startsWith("작가") -> author = value
-                label.startsWith("소개") -> synopsis = value
-            }
+        when {
+            label.startsWith("장르") -> genre = value
+            label.startsWith("작가") -> author = value
+            label.startsWith("소개") -> synopsis = value
         }
-
-        Log.d(TAG, "scrapeSeries($url) title=$title author=$author genre=$genre")
-        if (title.isBlank()) null
-        else Series(
-            id = id,
-            title = title,
-            coverUrl = cover,
-            author = author,
-            genre = genre,
-            synopsis = synopsis,
-            sourceUrl = url
-        )
-    } catch (e: Exception) {
-        Log.e(TAG, "scrapeSeries failed", e)
-        null
     }
+
+    Log.d(TAG, "parseSeriesDoc($url) title=$title author=$author genre=$genre")
+    return if (title.isBlank()) null
+    else Series(
+        id = id,
+        title = title,
+        coverUrl = cover,
+        author = author,
+        genre = genre,
+        synopsis = synopsis,
+        sourceUrl = url
+    )
+}
+
+// 디테일 화면 진입 시 시리즈 정보 + 챕터 목록이 모두 필요한데 둘 다 같은 seriesUrl 문서를 파싱하므로,
+// fetchDoc을 한 번만 호출해 각각 따로 부르는 것보다 요청을 절반으로 줄임
+suspend fun scrapeSeriesDetail(url: String): Pair<Series?, List<Chapter>> = try {
+    val doc = fetchDoc(url)
+    parseSeriesDoc(doc, url) to scrapeChapters(url, prefetchedFirstDoc = doc)
+} catch (e: Exception) {
+    Log.e(TAG, "scrapeSeriesDetail failed", e)
+    null to emptyList()
 }
 
 // href="/detail/ID/chapter-id" 패턴의 링크 추출 ("처음부터" 바로가기(class="first")는 실제 챕터 항목이 아니므로 제외)
@@ -204,12 +208,12 @@ private fun parseChapterListDoc(doc: Document, seriesId: String): List<Chapter> 
 // /episode/ID/1/1 페이지에서 챕터 목록 추출.
 // 챕터 목록도 사이트 자체가 페이지네이션을 씀(정적 HTML엔 최근 pageSize개만 옴) — URL의 두 번째 세그먼트가
 // 페이지 번호라서(/episode/{id}/{page}/{order}) episode.js 인라인 변수(total, pageSize)로 필요한 만큼 순회.
-suspend fun scrapeChapters(seriesUrl: String): List<Chapter> {
+suspend fun scrapeChapters(seriesUrl: String, prefetchedFirstDoc: Document? = null): List<Chapter> {
     return try {
         val seriesId = seriesUrl.substringAfter("/episode/").substringBefore("/")
         val baseUrl = Regex("""^(https?://[^/]+)""").find(seriesUrl)?.groupValues?.get(1) ?: "https://kmana10.net"
 
-        val firstDoc = fetchDoc(seriesUrl)
+        val firstDoc = prefetchedFirstDoc ?: fetchDoc(seriesUrl)
         val scriptText = firstDoc.select("script").joinToString("\n") { it.html() }
         val pageSize = Regex("""const\s+pageSize\s*=\s*(\d+)""").find(scriptText)?.groupValues?.get(1)?.toIntOrNull() ?: 100
         val total = Regex("""const\s+total\s*=\s*(\d+)""").find(scriptText)?.groupValues?.get(1)?.toIntOrNull() ?: 0

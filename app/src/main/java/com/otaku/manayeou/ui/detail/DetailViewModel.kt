@@ -39,8 +39,7 @@ class DetailViewModel(
     private fun load() {
         viewModelScope.launch {
             try {
-                val series = repo.fetchSeries(seriesUrl)
-                val chapters = repo.fetchChapters(seriesUrl)
+                val (series, chapters) = repo.fetchSeriesDetail(seriesUrl)
                 _state.update { it.copy(series = series, chapters = chapters, isLoading = false) }
             } catch (e: Exception) {
                 _state.update { it.copy(isLoading = false, error = e.message) }

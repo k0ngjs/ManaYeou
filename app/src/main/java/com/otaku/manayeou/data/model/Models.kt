@@ -21,6 +21,13 @@ data class Chapter(
     val isRead: Boolean = false
 )
 
+// 원본 회차 제목에서 헤더 등에 이미 나온 시리즈명만 제거해 한 줄로 표시.
+// 번호(number)는 스크래퍼의 인덱스 기반 fallback이라 신뢰도가 낮아, 완전히 빈 경우에만 최후 수단으로 사용.
+fun Chapter.displayTitle(seriesTitle: String): String =
+    title.let { if (seriesTitle.isNotBlank()) it.replace(seriesTitle, "") else it }
+        .trim(' ', '-', '–', '·', ':', '|')
+        .ifBlank { "${number}화" }
+
 data class MangaPage(
     val index: Int,
     val imageUrl: String

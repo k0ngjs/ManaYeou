@@ -8,13 +8,16 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -29,6 +32,7 @@ import com.otaku.manayeou.ui.my.MyScreen
 import com.otaku.manayeou.ui.search.SearchScreen
 import com.otaku.manayeou.ui.settings.SettingsScreen
 import com.otaku.manayeou.ui.viewer.ViewerScreen
+import com.otaku.manayeou.data.model.displayTitle
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -66,7 +70,15 @@ fun AppNavigation() {
                                 }
                             },
                             icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) }
+                            label = { Text(tab.label) },
+                            // 스포티파이처럼 캡슐 배경 없이 선택된 아이콘/텍스트만 브랜드 컬러로 표시
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                indicatorColor = Color.Transparent
+                            )
                         )
                     }
                 }
@@ -137,24 +149,26 @@ fun AppNavigation() {
                     onBack = { nav.popBackStack() },
                     onChapterClick = { chapter, series ->
                         val encodedChapterUrl = URLEncoder.encode(chapter.url, "UTF-8")
-                        val titleEncoded = URLEncoder.encode(chapter.title.ifBlank { "${chapter.number}화" }, "UTF-8")
+                        val titleEncoded = URLEncoder.encode(chapter.displayTitle(series.title), "UTF-8")
                         val seriesIdEncoded = URLEncoder.encode(series.id, "UTF-8")
                         val seriesUrlEncoded = URLEncoder.encode(series.sourceUrl, "UTF-8")
                         val seriesTitleEncoded = URLEncoder.encode(series.title, "UTF-8")
+                        val seriesAuthorEncoded = URLEncoder.encode(series.author, "UTF-8")
                         val coverUrlEncoded = URLEncoder.encode(series.coverUrl, "UTF-8")
-                        nav.navigate("viewer/$encodedChapterUrl/$titleEncoded/$seriesIdEncoded/$seriesUrlEncoded/$seriesTitleEncoded/$coverUrlEncoded")
+                        nav.navigate("viewer/$encodedChapterUrl/$titleEncoded/$seriesIdEncoded/$seriesUrlEncoded/$seriesTitleEncoded/$seriesAuthorEncoded/$coverUrlEncoded")
                     }
                 )
             }
 
             composable(
-                "viewer/{chapterUrl}/{title}/{seriesId}/{seriesUrl}/{seriesTitle}/{coverUrl}",
+                "viewer/{chapterUrl}/{title}/{seriesId}/{seriesUrl}/{seriesTitle}/{seriesAuthor}/{coverUrl}",
                 arguments = listOf(
                     navArgument("chapterUrl") { type = NavType.StringType },
                     navArgument("title") { type = NavType.StringType },
                     navArgument("seriesId") { type = NavType.StringType },
                     navArgument("seriesUrl") { type = NavType.StringType },
                     navArgument("seriesTitle") { type = NavType.StringType },
+                    navArgument("seriesAuthor") { type = NavType.StringType },
                     navArgument("coverUrl") { type = NavType.StringType }
                 )
             ) { back ->
@@ -163,6 +177,7 @@ fun AppNavigation() {
                 val seriesId = URLDecoder.decode(back.arguments?.getString("seriesId") ?: "", "UTF-8")
                 val seriesUrl = URLDecoder.decode(back.arguments?.getString("seriesUrl") ?: "", "UTF-8")
                 val seriesTitle = URLDecoder.decode(back.arguments?.getString("seriesTitle") ?: "", "UTF-8")
+                val seriesAuthor = URLDecoder.decode(back.arguments?.getString("seriesAuthor") ?: "", "UTF-8")
                 val coverUrl = URLDecoder.decode(back.arguments?.getString("coverUrl") ?: "", "UTF-8")
                 ViewerScreen(
                     chapterUrl = chapterUrl,
@@ -170,6 +185,7 @@ fun AppNavigation() {
                     seriesId = seriesId,
                     seriesUrl = seriesUrl,
                     seriesTitle = seriesTitle,
+                    seriesAuthor = seriesAuthor,
                     coverUrl = coverUrl,
                     onBack = { nav.popBackStack() },
                     onNavigateChapter = { newChapterUrl, newTitle ->
@@ -178,10 +194,11 @@ fun AppNavigation() {
                         val seriesIdEncoded = URLEncoder.encode(seriesId, "UTF-8")
                         val seriesUrlEncoded = URLEncoder.encode(seriesUrl, "UTF-8")
                         val seriesTitleEncoded = URLEncoder.encode(seriesTitle, "UTF-8")
+                        val seriesAuthorEncoded = URLEncoder.encode(seriesAuthor, "UTF-8")
                         val coverUrlEncoded = URLEncoder.encode(coverUrl, "UTF-8")
                         // 챕터를 계속 넘기면 뒤로가기 스택이 쌓이지 않도록 현재 뷰어를 교체
                         nav.popBackStack()
-                        nav.navigate("viewer/$encodedChapterUrl/$titleEncoded/$seriesIdEncoded/$seriesUrlEncoded/$seriesTitleEncoded/$coverUrlEncoded")
+                        nav.navigate("viewer/$encodedChapterUrl/$titleEncoded/$seriesIdEncoded/$seriesUrlEncoded/$seriesTitleEncoded/$seriesAuthorEncoded/$coverUrlEncoded")
                     }
                 )
             }

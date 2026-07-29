@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import coil.compose.AsyncImage
 import com.otaku.manayeou.data.model.Chapter
 import com.otaku.manayeou.data.model.Series
+import com.otaku.manayeou.data.model.displayTitle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -187,11 +188,7 @@ private fun ChapterItem(chapter: Chapter, seriesTitle: String, isLastRead: Boole
         color = if (isLastRead) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
         else MaterialTheme.colorScheme.surface
     ) {
-        // 헤더에 이미 나온 시리즈명만 제목에서 제거하고 한 줄로 표시
-        val displayTitle = chapter.title
-            .let { if (seriesTitle.isNotBlank()) it.replace(seriesTitle, "") else it }
-            .trim(' ', '-', '–', '·', ':', '|')
-            .ifBlank { "${chapter.number}화" }
+        val displayTitle = chapter.displayTitle(seriesTitle)
 
         Row(
             modifier = Modifier.fillMaxWidth()

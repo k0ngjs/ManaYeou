@@ -36,6 +36,7 @@ class ViewerViewModel(
     private val seriesId: String,
     private val seriesUrl: String,
     private val seriesTitle: String,
+    private val seriesAuthor: String,
     private val coverUrl: String
 ) : AndroidViewModel(app) {
 
@@ -131,6 +132,7 @@ class ViewerViewModel(
                 seriesId = seriesId,
                 seriesUrl = seriesUrl,
                 seriesTitle = seriesTitle,
+                seriesAuthor = seriesAuthor,
                 coverUrl = coverUrl,
                 lastPage = page,
                 totalPages = totalPages
