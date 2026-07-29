@@ -1,5 +1,8 @@
 package com.otaku.manayeou.ui.list
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -13,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -20,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.otaku.manayeou.data.model.Series
+import com.otaku.manayeou.ui.common.CenteredMessage
 import com.otaku.manayeou.ui.common.SeriesListItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,21 +72,37 @@ fun ListScreen(
             }
         }
     ) { padding ->
-        LazyColumn(contentPadding = padding) {
-            items(state.items, key = { it.id }) { series ->
-                SeriesListItem(
-                    series = series,
-                    selectable = state.selectionMode,
-                    selected = series.id in state.selectedIds,
-                    onClick = {
-                        if (state.selectionMode) viewModel.toggleSelection(series.id)
-                        else onSeriesClick(series)
-                    },
-                    onLongClick = if (viewModel.isDeletable) {
-                        { viewModel.startSelection(series.id) }
-                    } else null
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            when {
+                state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                state.error != null -> CenteredMessage(
+                    message = state.error!!,
+                    isError = true,
+                    retryLabel = "다시 시도",
+                    onRetry = { viewModel.retry() },
+                    modifier = Modifier.align(Alignment.Center)
                 )
-                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.surfaceVariant)
+                state.items.isEmpty() -> CenteredMessage(
+                    message = "목록이 비어 있습니다",
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                else -> LazyColumn {
+                    items(state.items, key = { it.id }) { series ->
+                        SeriesListItem(
+                            series = series,
+                            selectable = state.selectionMode,
+                            selected = series.id in state.selectedIds,
+                            onClick = {
+                                if (state.selectionMode) viewModel.toggleSelection(series.id)
+                                else onSeriesClick(series)
+                            },
+                            onLongClick = if (viewModel.isDeletable) {
+                                { viewModel.startSelection(series.id) }
+                            } else null
+                        )
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.surfaceVariant)
+                    }
+                }
             }
         }
     }

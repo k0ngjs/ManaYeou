@@ -31,6 +31,7 @@ import coil.compose.AsyncImage
 import com.otaku.manayeou.data.model.Chapter
 import com.otaku.manayeou.data.model.Series
 import com.otaku.manayeou.data.model.displayTitle
+import com.otaku.manayeou.ui.common.CenteredMessage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +76,12 @@ fun DetailScreen(
 
         state.error?.let {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(it, color = MaterialTheme.colorScheme.error)
+                CenteredMessage(
+                    message = it,
+                    isError = true,
+                    retryLabel = "다시 시도",
+                    onRetry = { viewModel.retry() }
+                )
             }
             return@Scaffold
         }
