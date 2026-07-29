@@ -12,4 +12,8 @@
 /captures
 .externalNativeBuild
 .cxx
+
+# Release signing secrets — never commit
+/keystore.properties
+/keystore/
 local.properties
