@@ -17,7 +17,7 @@ private var cachedDnsSrc: String? = null
 private var cachedDnsSrc2: String? = null
 
 // "//host/path" 또는 상대경로를 절대 URL로 변환
-private fun resolveImgUrl(raw: String, baseUrl: String = "https://kmana10.net"): String {
+internal fun resolveImgUrl(raw: String, baseUrl: String = "https://kmana10.net"): String {
     val v = raw.trim()
     return when {
         v.isBlank() -> ""
@@ -104,7 +104,7 @@ suspend fun searchSeries(baseUrl: String, keyword: String): List<Series> = withC
 
 // /api/toon/list 와 /api/search 모두 { code, result: { total, list: [{ id, title, content, tags, author, src, ... }] } } 형태.
 // /api/toon/list 의 항목엔 "src"에 커버 URL이 직접 오지만 /api/search 항목엔 없어서, 없을 때만 id 기반 패턴으로 대체.
-private fun parseToonListJson(body: String, baseUrl: String): List<Series> {
+internal fun parseToonListJson(body: String, baseUrl: String): List<Series> {
     if (body.isBlank()) return emptyList()
     return try {
         val array = org.json.JSONObject(body).optJSONObject("result")?.optJSONArray("list") ?: org.json.JSONArray()
@@ -180,7 +180,7 @@ suspend fun scrapeSeriesDetail(url: String): Pair<Series?, List<Chapter>> = try 
 }
 
 // href="/detail/ID/chapter-id" 패턴의 링크 추출 ("처음부터" 바로가기(class="first")는 실제 챕터 항목이 아니므로 제외)
-private fun parseChapterListDoc(doc: Document, seriesId: String): List<Chapter> {
+internal fun parseChapterListDoc(doc: Document, seriesId: String): List<Chapter> {
     val chapterLinks = doc.select("a[href*='/detail/']").filterNot { it.hasClass("first") }
     return chapterLinks.mapIndexed { i, el ->
         val href = el.attr("abs:href")
