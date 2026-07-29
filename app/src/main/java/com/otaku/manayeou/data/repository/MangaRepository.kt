@@ -14,6 +14,7 @@ import com.otaku.manayeou.data.remote.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.withLock
 
 class MangaRepository(context: Context) {
 
@@ -22,6 +23,13 @@ class MangaRepository(context: Context) {
     private val historyDao = db.readHistoryDao()
     private val settingsRepo = SettingsRepository(context)
 
+    companion object {
+        // 텔레그램 채널에서 알아낸 kmana 도메인은 세션 동안 거의 바뀌지 않으므로
+        // 화면마다 새로 생성되는 MangaRepository 인스턴스들이 공유하도록 companion에 캐싱
+        @Volatile private var cachedAutoBaseUrl: String? = null
+        private val baseUrlMutex = kotlinx.coroutines.sync.Mutex()
+    }
+
     // ── 원격 ──────────────────────────────────────────
 
     private suspend fun resolveBaseUrl(): String {
@@ -29,10 +37,16 @@ class MangaRepository(context: Context) {
             val manual = settingsRepo.getManualBaseUrl().trim()
             if (manual.isNotBlank()) return manual.trimEnd('/')
         }
-        val urls = fetchChannelUrls()
-        Log.d("MangaRepo", "Telegram URLs: $urls")
-        // 텔레그램에서 가져온 kmana 도메인 중 첫 번째 사용; 없으면 기본값
-        return urls.firstOrNull()?.trimEnd('/') ?: "https://kmana10.net"
+        cachedAutoBaseUrl?.let { return it }
+        return baseUrlMutex.withLock {
+            cachedAutoBaseUrl?.let { return@withLock it }
+            val urls = fetchChannelUrls()
+            Log.d("MangaRepo", "Telegram URLs: $urls")
+            // 텔레그램에서 가져온 kmana 도메인 중 첫 번째 사용; 없으면 기본값
+            val resolved = urls.firstOrNull()?.trimEnd('/') ?: "https://kmana10.net"
+            cachedAutoBaseUrl = resolved
+            resolved
+        }
     }
 
     suspend fun fetchLatest(): List<Series> {

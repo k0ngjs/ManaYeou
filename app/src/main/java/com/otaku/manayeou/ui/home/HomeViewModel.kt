@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.otaku.manayeou.data.model.Series
 import com.otaku.manayeou.data.repository.MangaRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,8 +51,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
-                val latest = repo.fetchLatest()
-                val popular = repo.fetchPopular()
+                val (latest, popular) = coroutineScope {
+                    val latestDeferred = async { repo.fetchLatest() }
+                    val popularDeferred = async { repo.fetchPopular() }
+                    latestDeferred.await() to popularDeferred.await()
+                }
                 _state.update { it.copy(latest = latest, popular = popular, isLoading = false) }
             } catch (e: Exception) {
                 _state.update { it.copy(isLoading = false, error = "불러오기 실패: ${e.message}") }
