@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.otaku.manayeou.data.model.Series
+import com.otaku.manayeou.ui.common.CenteredMessage
 import com.otaku.manayeou.ui.common.SeriesCarouselSection
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,26 +50,19 @@ fun HomeScreen(
             when {
                 // 새로고침 중에도 이미 있던 콘텐츠는 그대로 보여주고, 최초 로딩일 때만 전체 화면 스피너
                 state.isLoading && !hasContent -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                state.error != null && !hasContent -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center).padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(state.error!!, color = MaterialTheme.colorScheme.error)
-                        Button(onClick = { viewModel.refresh() }) { Text("다시 시도") }
-                    }
-                }
-                !hasContent -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center).padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text("콘텐츠가 없습니다", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = { viewModel.refresh() }) { Text("새로고침") }
-                    }
-                }
+                state.error != null && !hasContent -> CenteredMessage(
+                    message = state.error!!,
+                    isError = true,
+                    retryLabel = "다시 시도",
+                    onRetry = { viewModel.refresh() },
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                !hasContent -> CenteredMessage(
+                    message = "콘텐츠가 없습니다",
+                    retryLabel = "새로고침",
+                    onRetry = { viewModel.refresh() },
+                    modifier = Modifier.align(Alignment.Center)
+                )
                 else -> {
                     Column(
                         modifier = Modifier

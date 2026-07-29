@@ -12,6 +12,7 @@ data class ListUiState(
     val title: String = "",
     val items: List<Series> = emptyList(),
     val isLoading: Boolean = true,
+    val error: String? = null,
     val selectedIds: Set<String> = emptySet(),
     val selectionMode: Boolean = false
 )
@@ -63,27 +64,36 @@ class ListViewModel(
         }
     }
 
+    fun retry() {
+        _state.update { it.copy(isLoading = true, error = null) }
+        load()
+    }
+
     private fun load() {
         viewModelScope.launch {
-            when (category) {
-                "latest" -> {
-                    val items = repo.fetchLatest()
-                    _state.update { it.copy(items = items, isLoading = false) }
-                }
-                "popular" -> {
-                    val items = repo.fetchPopular()
-                    _state.update { it.copy(items = items, isLoading = false) }
-                }
-                "bookmarked" -> {
-                    repo.getBookmarks().collect { items ->
+            try {
+                when (category) {
+                    "latest" -> {
+                        val items = repo.fetchLatest()
                         _state.update { it.copy(items = items, isLoading = false) }
                     }
-                }
-                "recent" -> {
-                    repo.getRecentHistory(100).collect { items ->
+                    "popular" -> {
+                        val items = repo.fetchPopular()
                         _state.update { it.copy(items = items, isLoading = false) }
                     }
+                    "bookmarked" -> {
+                        repo.getBookmarks().collect { items ->
+                            _state.update { it.copy(items = items, isLoading = false) }
+                        }
+                    }
+                    "recent" -> {
+                        repo.getRecentHistory(100).collect { items ->
+                            _state.update { it.copy(items = items, isLoading = false) }
+                        }
+                    }
                 }
+            } catch (e: Exception) {
+                _state.update { it.copy(isLoading = false, error = "불러오기 실패: ${e.message}") }
             }
         }
     }

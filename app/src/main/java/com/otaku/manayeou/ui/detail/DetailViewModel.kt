@@ -63,6 +63,11 @@ class DetailViewModel(
         }
     }
 
+    fun retry() {
+        _state.update { it.copy(isLoading = true, error = null) }
+        load()
+    }
+
     fun toggleBookmark() {
         val series = _state.value.series ?: return
         viewModelScope.launch {

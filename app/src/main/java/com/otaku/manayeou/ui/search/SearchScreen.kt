@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.otaku.manayeou.data.model.Series
+import com.otaku.manayeou.ui.common.CenteredMessage
 import com.otaku.manayeou.ui.common.SeriesListItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,15 +53,13 @@ fun SearchScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
                 state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                !state.hasSearched -> Text(
-                    "만화 제목을 검색해보세요",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center).padding(32.dp)
+                !state.hasSearched -> CenteredMessage(
+                    message = "만화 제목을 검색해보세요",
+                    modifier = Modifier.align(Alignment.Center)
                 )
-                state.error != null -> Text(
-                    state.error!!,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center).padding(32.dp)
+                state.error != null -> CenteredMessage(
+                    message = state.error!!,
+                    modifier = Modifier.align(Alignment.Center)
                 )
                 else -> LazyColumn {
                     items(state.results) { series ->
