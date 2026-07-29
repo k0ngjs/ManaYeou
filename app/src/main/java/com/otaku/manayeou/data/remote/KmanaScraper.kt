@@ -68,65 +68,58 @@ suspend fun scrapeLatest(baseUrl: String): List<Series> = fetchToonList(baseUrl,
 
 suspend fun scrapePopular(baseUrl: String): List<Series> = fetchToonList(baseUrl, orderType = "hit")
 
+// 실패를 여기서 emptyList()로 삼키면 ViewModel의 에러 메시지 표시(불러오기 실패: ...)가 무력화되고
+// 화면엔 "콘텐츠가 없습니다"만 보여 실제 원인(타임아웃/차단/API 오류)을 알 수 없게 되므로 예외를 그대로 전파
 private suspend fun fetchToonList(baseUrl: String, orderType: String): List<Series> = withContext(Dispatchers.IO) {
-    try {
-        val request = Request.Builder()
-            .url("$baseUrl/api/toon/list?keyWord=&page=1&type=0&orderType=$orderType&toonListFrom=latestToonList")
-            .header("Referer", "$baseUrl/latest")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .build()
-        val body = sharedHttpClient.newCall(request).execute().use { it.body?.string() ?: "" }
-        Log.d(TAG, "fetchToonList(orderType=$orderType) response length=${body.length}")
-        parseToonListJson(body, baseUrl)
-    } catch (e: Exception) {
-        Log.e(TAG, "fetchToonList failed", e)
-        emptyList()
-    }
+    val request = Request.Builder()
+        .url("$baseUrl/api/toon/list?keyWord=&page=1&type=0&orderType=$orderType&toonListFrom=latestToonList")
+        .header("Referer", "$baseUrl/latest")
+        .header("X-Requested-With", "XMLHttpRequest")
+        .build()
+    val body = sharedHttpClient.newCall(request).execute().use { it.body?.string() ?: "" }
+    Log.d(TAG, "fetchToonList(orderType=$orderType) response length=${body.length}")
+    parseToonListJson(body, baseUrl)
 }
 
 // 검색 결과 페이지(/search)는 JS로 /api/search를 호출해 렌더링하므로 API를 직접 호출
 suspend fun searchSeries(baseUrl: String, keyword: String): List<Series> = withContext(Dispatchers.IO) {
-    try {
-        val encoded = java.net.URLEncoder.encode(keyword, "UTF-8")
-        val request = Request.Builder()
-            .url("$baseUrl/api/search?key=$encoded")
-            .header("Referer", "$baseUrl/search?key=$encoded")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .build()
-        val body = sharedHttpClient.newCall(request).execute().use { it.body?.string() ?: "" }
-        Log.d(TAG, "searchSeries($keyword) raw response: ${body.take(1500)}")
-        parseToonListJson(body, baseUrl)
-    } catch (e: Exception) {
-        Log.e(TAG, "searchSeries failed", e)
-        emptyList()
-    }
+    val encoded = java.net.URLEncoder.encode(keyword, "UTF-8")
+    val request = Request.Builder()
+        .url("$baseUrl/api/search?key=$encoded")
+        .header("Referer", "$baseUrl/search?key=$encoded")
+        .header("X-Requested-With", "XMLHttpRequest")
+        .build()
+    val body = sharedHttpClient.newCall(request).execute().use { it.body?.string() ?: "" }
+    Log.d(TAG, "searchSeries($keyword) raw response: ${body.take(1500)}")
+    parseToonListJson(body, baseUrl)
 }
 
 // /api/toon/list 와 /api/search 모두 { code, result: { total, list: [{ id, title, content, tags, author, src, ... }] } } 형태.
 // /api/toon/list 의 항목엔 "src"에 커버 URL이 직접 오지만 /api/search 항목엔 없어서, 없을 때만 id 기반 패턴으로 대체.
 internal fun parseToonListJson(body: String, baseUrl: String): List<Series> {
     if (body.isBlank()) return emptyList()
-    return try {
-        val array = org.json.JSONObject(body).optJSONObject("result")?.optJSONArray("list") ?: org.json.JSONArray()
-        (0 until array.length()).mapNotNull { i ->
-            val obj = array.optJSONObject(i) ?: return@mapNotNull null
-            val id = obj.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val title = obj.optString("title").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val coverRaw = obj.optString("src")
-            val cover = if (coverRaw.isNotBlank()) resolveImgUrl(coverRaw) else "https://smallimage.11toon8.com/data/toon_category/$id.webp"
-            Series(
-                id = id,
-                title = title,
-                author = obj.optString("author"),
-                coverUrl = cover,
-                synopsis = obj.optString("content"),
-                genre = obj.optString("tags"),
-                sourceUrl = "$baseUrl/episode/$id/1/1"
-            )
-        }
+    val array = try {
+        org.json.JSONObject(body).optJSONObject("result")?.optJSONArray("list") ?: org.json.JSONArray()
     } catch (e: Exception) {
+        // 응답이 JSON이 아닌 경우(차단 페이지, 서버 오류 HTML 등) - 빈 목록으로 숨기지 않고 원인이 보이도록 전파
         Log.e(TAG, "parseToonListJson failed, body=${body.take(300)}", e)
-        emptyList()
+        throw IllegalStateException("응답을 해석할 수 없음: ${body.take(200)}", e)
+    }
+    return (0 until array.length()).mapNotNull { i ->
+        val obj = array.optJSONObject(i) ?: return@mapNotNull null
+        val id = obj.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val title = obj.optString("title").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val coverRaw = obj.optString("src")
+        val cover = if (coverRaw.isNotBlank()) resolveImgUrl(coverRaw) else "https://smallimage.11toon8.com/data/toon_category/$id.webp"
+        Series(
+            id = id,
+            title = title,
+            author = obj.optString("author"),
+            coverUrl = cover,
+            synopsis = obj.optString("content"),
+            genre = obj.optString("tags"),
+            sourceUrl = "$baseUrl/episode/$id/1/1"
+        )
     }
 }
 
